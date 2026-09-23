@@ -38,7 +38,7 @@ jobs:
           A11Y_LLM_PROVIDER: groq
           A11Y_LLM_MODEL: openai/gpt-oss-120b
           A11Y_GROQ_API_KEYS: ${{ secrets.GROQ_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN != '' && secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           # 0. Configure Git identity
           git config --global user.name "accessibility-agent[bot]"
@@ -59,9 +59,9 @@ jobs:
               files = sorted(glob.glob('reports/*_report.json'))
               if not files: sys.exit(0)
               r = json.load(open(files[-1]))
-              # Get the first 3 confirmed findings that are not color-contrast
+              # Get all confirmed findings that are not color-contrast
               findings = [f for f in r['findings'] if f.get('status') == 'confirmed' and f.get('rule_id') != 'color-contrast']
-              for i, finding in enumerate(findings[:3]):
+              for i, finding in enumerate(findings):
                   print(f'Found finding: {finding[\"finding_id\"]}')
                   with open(f'finding_{i}.json', 'w') as f:
                       json.dump(finding, f)
