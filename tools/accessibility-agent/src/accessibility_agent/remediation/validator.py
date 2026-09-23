@@ -155,6 +155,7 @@ class PatchValidator:
         result.no_new_contradictions = True
         result.is_valid = True
 
+        abs_path = (self._repo / patch.target_file).resolve()
         language = Path(patch.target_file).suffix.lstrip(".")
 
         log.info(
