@@ -233,6 +233,8 @@ class GroqLLMClient(BaseLLMClient):
         log.info("llm_client.groq_initialized", model=self._model, total_keys=len(self._keys))
 
     async def generate(self, prompt: str, system: str = "") -> LLMResponse | None:
+        import asyncio
+
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -240,45 +242,55 @@ class GroqLLMClient(BaseLLMClient):
 
         from groq import AsyncGroq
 
-        max_retries = len(self._keys)
-        for attempt in range(max_retries):
-            try:
-                log.debug("llm_client.generating", provider="groq", prompt_len=len(prompt), key_idx=self._current_key_idx)
-                response = await self._client.chat.completions.create(
-                    model=self._model,
-                    messages=messages,
-                    temperature=settings.llm_temperature,
-                    max_tokens=settings.llm_max_tokens,
-                )
-                text = response.choices[0].message.content or ""
-                usage = response.usage
-                log.info("llm_client.response_received",
-                         provider="groq",
-                         prompt_tokens=usage.prompt_tokens if usage else 0,
-                         completion_tokens=usage.completion_tokens if usage else 0)
-                return LLMResponse(
-                    text=text,
-                    model=self._model,
-                    prompt_tokens=usage.prompt_tokens if usage else 0,
-                    completion_tokens=usage.completion_tokens if usage else 0,
-                )
-            except Exception as exc:
-                err_str = str(exc).lower()
-                # If we hit a 429 rate limit or similar limit, rotate the key
-                if "429" in err_str or "rate_limit" in err_str or "too many requests" in err_str:
-                    log.warning("llm_client.rate_limit_hit", provider="groq", key_idx=self._current_key_idx)
-                    # Rotate the key
-                    self._current_key_idx = (self._current_key_idx + 1) % len(self._keys)
-                    self._client = AsyncGroq(api_key=self._keys[self._current_key_idx], max_retries=0)
-                    log.info("llm_client.key_rotated", new_key_idx=self._current_key_idx)
-                    # Continue the loop to retry with the new key
-                    continue
-                else:
-                    # If it's a different error (e.g. 404 Model Not Found), don't retry, just fail
-                    log.error("llm_client.generate_failed", provider="groq", error=str(exc))
-                    return None
-        
-        log.error("llm_client.all_keys_exhausted", provider="groq")
+        # Two full passes: first try all keys, if all rate-limited wait 60s and retry
+        for pass_num in range(2):
+            max_retries = len(self._keys)
+            for attempt in range(max_retries):
+                try:
+                    log.debug("llm_client.generating", provider="groq", prompt_len=len(prompt), key_idx=self._current_key_idx)
+                    response = await self._client.chat.completions.create(
+                        model=self._model,
+                        messages=messages,
+                        temperature=settings.llm_temperature,
+                        max_tokens=settings.llm_max_tokens,
+                    )
+                    text = response.choices[0].message.content or ""
+                    usage = response.usage
+                    log.info("llm_client.response_received",
+                             provider="groq",
+                             prompt_tokens=usage.prompt_tokens if usage else 0,
+                             completion_tokens=usage.completion_tokens if usage else 0)
+                    return LLMResponse(
+                        text=text,
+                        model=self._model,
+                        prompt_tokens=usage.prompt_tokens if usage else 0,
+                        completion_tokens=usage.completion_tokens if usage else 0,
+                    )
+                except Exception as exc:
+                    err_str = str(exc).lower()
+                    # If we hit a 429 rate limit or similar limit, rotate the key
+                    if "429" in err_str or "rate_limit" in err_str or "too many requests" in err_str:
+                        log.warning("llm_client.rate_limit_hit", provider="groq", key_idx=self._current_key_idx)
+                        # Rotate the key
+                        self._current_key_idx = (self._current_key_idx + 1) % len(self._keys)
+                        self._client = AsyncGroq(api_key=self._keys[self._current_key_idx], max_retries=0)
+                        log.info("llm_client.key_rotated", new_key_idx=self._current_key_idx)
+                        # Continue the loop to retry with the new key
+                        continue
+                    else:
+                        # If it's a different error (e.g. 404 Model Not Found), don't retry, just fail
+                        log.error("llm_client.generate_failed", provider="groq", error=str(exc))
+                        return None
+
+            # All keys exhausted on this pass
+            if pass_num == 0:
+                # First pass failed — wait 60 seconds for Groq rate limit to reset, then retry
+                log.warning("llm_client.all_keys_exhausted_waiting", provider="groq", wait_seconds=60)
+                await asyncio.sleep(60)
+            else:
+                # Second pass also failed — give up
+                log.error("llm_client.all_keys_exhausted", provider="groq")
+
         return None
 
     @property
