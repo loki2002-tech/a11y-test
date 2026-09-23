@@ -521,11 +521,11 @@ class PatchGenerator:
             # Find the indent of existing attributes
             attr_line_match = re.search(r"\n(\s+)\w", tag_text)
             indent = attr_line_match.group(1) if attr_line_match else "  "
-            # Insert before the closing >
+            # Insert before the first closing > or />
             tag_text = re.sub(r"(\n\s*/>|\n\s*>)", f"\n{indent}{attr_str}\\1", tag_text, count=1)
         else:
-            # Insert before /> or > (single-line)
-            tag_text = re.sub(r"\s*(/>|>)$", f' {attr_str}\\1', tag_text, count=1)
+            # Insert before the FIRST /> or > (single-line)
+            tag_text = re.sub(r"\s*(/>|>)", f' {attr_str}\\1', tag_text, count=1)
 
         return tag_text
 
