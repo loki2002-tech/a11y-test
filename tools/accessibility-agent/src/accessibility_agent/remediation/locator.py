@@ -392,8 +392,8 @@ class SourceLocator:
 
         location = SourceLocation(
             file_path=str(best.file_path.relative_to(self._repo)),
-            start_line=max(1, best.line_number - 2),
-            end_line=best.line_number + 2,
+            start_line=best.line_number,
+            end_line=best.line_number,
             language=best.file_path.suffix.lstrip("."),
             confidence=confidence,
             framework=self._framework,
@@ -646,9 +646,9 @@ class SourceLocator:
         if not html_snippet or len(html_snippet) < 10:
             return results
 
-        # Extract distinctive attribute values (data-*, name=, type= etc.)
+        # Extract full distinctive attributes (e.g. type="email", name="username")
         attr_patterns = re.findall(
-            r'(?:data-[a-z-]+|name|type|placeholder|for)\s*=\s*["\']([^"\']{3,30})["\']',
+            r'((?:data-[a-z-]+|name|type|placeholder|for)\s*=\s*["\'][^"\']{3,30}["\'])',
             html_snippet,
             re.IGNORECASE,
         )
