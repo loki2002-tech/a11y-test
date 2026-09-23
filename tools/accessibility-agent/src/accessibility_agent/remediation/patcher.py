@@ -362,9 +362,22 @@ class PatchGenerator:
         # Determine the expected tag name
         expected_tag = self._expected_tag(plan)
 
-        # Search for the opening tag
+        # Search for the opening tag by radiating outwards from the anchor
         tag_start_idx = None
-        for i in range(search_start, search_end):
+        
+        # Build search order: anchor, anchor+1, anchor-1, anchor+2, anchor-2...
+        search_indices = []
+        for offset in range(11):
+            if offset == 0:
+                if 0 <= anchor < len(lines):
+                    search_indices.append(anchor)
+            else:
+                if 0 <= anchor + offset < len(lines):
+                    search_indices.append(anchor + offset)
+                if 0 <= anchor - offset < len(lines):
+                    search_indices.append(anchor - offset)
+
+        for i in search_indices:
             line = lines[i]
             if expected_tag and re.search(rf"<{re.escape(expected_tag)}\b", line, re.IGNORECASE):
                 tag_start_idx = i
