@@ -53,8 +53,8 @@ jobs:
               files = sorted(glob.glob('reports/*_report.json'))
               if not files: sys.exit(0)
               r = json.load(open(files[-1]))
-              # Get the first confirmed finding
-              findings = [f for f in r['findings'] if f.get('status') == 'confirmed']
+              # Get the html-has-lang finding
+              findings = [f for f in r['findings'] if f.get('rule_id') == 'html-has-lang' and f.get('status') == 'confirmed']
               if findings:
                   print('Found finding:', findings[0]['finding_id'])
                   with open('finding.json', 'w') as f:
