@@ -193,7 +193,7 @@
 
   <!-- AXE: aria-hidden-focus + MANUAL: modal with no focus trap, no aria-modal, no labelledby -->
   <div class="modal" id="modalTrigger">
-    <p>This is a modal dialog with no role="dialog", no aria-modal, no focus trap,
+    <p tag="p">This is a modal dialog with no role="dialog", no aria-modal, no focus trap,
        and no way to close it via keyboard (Escape does nothing, close icon below has no accessible name).</p>
     <button class="icon-btn" onclick="document.getElementById('modalTrigger').style.display='none'">&times;</button>
   </div>
