@@ -329,8 +329,9 @@ class SourceLocator:
             # Fallback to evidence file_path if available
             fallback_path = None
             for ev in finding_data.get("evidence", []):
-                if ev.get("file_path"):
-                    fallback_path = ev["file_path"]
+                fp = ev.get("file_path", "")
+                if fp and not fp.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    fallback_path = fp
                     break
             
             if fallback_path:
