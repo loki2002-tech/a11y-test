@@ -39,6 +39,10 @@ jobs:
           A11Y_GROQ_API_KEYS: ${{ secrets.GROQ_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 0. Configure Git identity
+          git config --global user.name "accessibility-agent[bot]"
+          git config --global user.email "accessibility-agent[bot]@users.noreply.github.com"
+          
           # 1. Run the scan
           python -m accessibility_agent.cli scan \
             --url http://localhost:8080/index.html \
@@ -70,6 +74,6 @@ jobs:
               echo "Triggering Remediation Agent for $file..."
               python -m accessibility_agent.cli remediate \
                 --finding "$file" \
-                --repo . || echo "Remediation skipped or failed, continuing..."
+                --repo .
             fi
           done
