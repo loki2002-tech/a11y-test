@@ -1,0 +1,63 @@
+name: AI Accessibility Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'URL to scan (defaults to allcanaccess.com if empty)'
+        required: false
+        type: string
+
+jobs:
+  accessibility-audit:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: "pip"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install fastapi uvicorn
+
+    - name: Install Playwright browsers
+      run: |
+        playwright install-deps chromium
+        playwright install chromium
+
+    - name: Run Accessibility Agent Scan
+      env:
+        # Pass the Groq API key from GitHub Secrets if RAG reasoning is desired
+        A11Y_LLM_PROVIDER: groq
+        A11Y_GROQ_API_KEYS: ${{ secrets.GROQ_API_KEY }}
+        PYTHONPATH: src
+      run: |
+        # Use the provided input URL, or fallback to the target application
+        TARGET_URL="${{ github.event.inputs.target_url || 'https://allcanaccess.com/' }}"
+        
+        echo "Starting scan against $TARGET_URL..."
+        
+        # We run the CLI directly in CI/CD (rather than the API) to block the pipeline synchronously
+        python -m accessibility_agent.cli scan \
+          --url "$TARGET_URL" \
+          --mode automated \
+          --browser chromium \
+          --agentic
+          
+    - name: Archive Accessibility Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: accessibility-reports
+        path: |
+          reports/
+          evidence/
+        retention-days: 7

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<!-- BUG: Missing lang attribute on html element (WCAG 3.1.1) -->
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <!-- BUG: Missing <title> element (WCAG 2.4.2) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="site-logo">
+      <!-- BUG: Image link missing alt text (WCAG 1.1.1) -->
+      <a href="/" class="logo-link">
+        <img src="{% static 'images/logo.png' %}" class="logo-img" />
+      </a>
+    </div>
+
+    <nav class="main-nav" aria-label="Main">
+      {% for item in nav_items %}
+        <a href="{{ item.url }}" class="nav-item">{{ item.label }}</a>
+      {% endfor %}
+    </nav>
+  </header>
+
+  <main id="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <!-- BUG: Button missing accessible name (WCAG 4.1.2) -->
+    <button class="back-to-top" onclick="scrollToTop()">
+      <span class="icon-arrow-up"></span>
+    </button>
+    <p>&copy; 2024 My Company</p>
+  </footer>
+
+</body>
+</html>

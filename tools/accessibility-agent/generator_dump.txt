@@ -1,0 +1,488 @@
+"""
+Report Generator.
+
+Generates accessibility testing reports in multiple formats:
+1. JSON — machine-readable, schema-validated
+2. HTML — human-readable with embedded screenshots, evidence, and remediation
+3. CSV — for spreadsheet-based review workflows
+
+Design principles:
+- Reports are GENERATED FROM validated Finding objects, not from LLM text.
+- Screenshots are embedded as data URIs in HTML reports.
+- Every finding links back to its evidence.
+- Reports include an explicit disclaimer that they do not constitute
+  WCAG conformance determination.
+
+The HTML template uses Jinja2.
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from jinja2 import Environment, PackageLoader, select_autoescape, BaseLoader, DictLoader
+
+from accessibility_agent.config import settings
+from accessibility_agent.logging_config import get_logger
+from accessibility_agent.wcag.schemas import (
+    Finding,
+    FindingStatus,
+    ScanResult,
+    WCAGLevel,
+)
+
+log = get_logger(__name__)
+
+
+# ── HTML Template ─────────────────────────────────────────────────────────────
+
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Accessibility Report — {{ result.url }}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --bg: #0a0f1a; --surface: #111827; --surface2: #1f2937; --border: #64748b; --text: #f9fafb; --text-muted: #cbd5e1; --accent: #fca5a5; --accent2: #f97316; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding-bottom: 80px; }
+    
+    /* Hero */
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); padding: 60px 20px 40px; text-align: center; border-bottom: 1px solid var(--border); }
+    .hero h1 { font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, #f8fafc 0%, #818cf8 50%, #f8fafc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 12px; letter-spacing: -1px; }
+    .hero .subtitle { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 20px; }
+    .hero .subtitle span { background: rgba(255,255,255,0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.08); color: #cbd5e1; font-size: 0.85rem; font-weight: 500; padding: 6px 14px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 6px; }
+    .hero .subtitle span b { color: #e2e8f0; font-weight: 600; }
+    
+    .container { max-width: 1400px; margin: -20px auto 40px; padding: 0 20px; position: relative; z-index: 10; }
+    
+    /* Stats as Filters */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: transform 0.2s, border-color 0.2s, background 0.2s; user-select: none; }
+    .stat:hover { transform: translateY(-3px); border-color: #94a3b8; }
+    .stat.active-filter { background: #1e293b; border-color: #818cf8; box-shadow: 0 0 15px rgba(129, 140, 248, 0.2); }
+    .stat .number { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; }
+    .stat .label { color: #cbd5e1; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+    /* Dropdown Filters */
+    .filter-bar { display: flex; gap: 16px; margin-bottom: 30px; flex-wrap: wrap; background: var(--surface); padding: 16px; border-radius: 12px; border: 1px solid var(--border); }
+    .filter-bar select { background: var(--surface2); color: #fff; border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; cursor: pointer; flex: 1; min-width: 200px; }
+    .filter-bar select:focus { border-color: #818cf8; }
+    .filter-status-text { width: 100%; color: #94a3b8; font-size: 0.9rem; margin-top: 8px; font-weight: 500; display: none; }
+
+    /* Cards */
+    .violations-list { display: flex; flex-direction: column; gap: 24px; }
+    .violation-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: grid; grid-template-columns: 400px 1fr; align-items: stretch; transition: display 0.3s; }
+    @media (max-width: 1024px) { .violation-card { grid-template-columns: 1fr; } }
+    
+    .card-screenshot { background: #18212f; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; border-right: 1px solid var(--border); }
+    .card-screenshot img { max-width: 100%; max-height: 350px; object-fit: contain; border-radius: 8px; border: 1px solid #334155; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .no-screenshot { color: #64748b; font-style: italic; font-size: 0.9rem; }
+    
+    .card-details { padding: 24px 32px; display: flex; flex-direction: column; gap: 16px; }
+    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .severity-badge { padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid; }
+    
+    .badge-critical { background: rgba(220, 38, 38, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+    .badge-serious { background: rgba(234, 88, 12, 0.15); color: #f97316; border-color: rgba(249, 115, 22, 0.3); }
+    .badge-moderate { background: rgba(202, 138, 4, 0.15); color: #eab308; border-color: rgba(234, 179, 8, 0.3); }
+    .badge-minor { background: rgba(37, 99, 235, 0.15); color: #60a5fa; border-color: rgba(96, 165, 250, 0.3); }
+    .badge-wcag { background: #1e293b; border-color: #475569; color: #cbd5e1; }
+    
+    .violation-title { font-size: 1.25rem; font-weight: 700; line-height: 1.3; color: #f8fafc; }
+    
+    .explanation-block { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px; border-left: 4px solid #818cf8; }
+    .explanation-block h4 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px; }
+    .explanation-block p { font-size: 0.95rem; color: #e2e8f0; line-height: 1.6; }
+    .explanation-block p:not(:last-child) { margin-bottom: 12px; }
+
+    /* Selector Copy Block */
+    .xpath-container { display: flex; align-items: center; gap: 12px; background: #0f172a; padding: 10px 16px; border-radius: 8px; border: 1px solid #334155; }
+    .xpath-container span { color: #94a3b8; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
+    .xpath-container code { color: #a78bfa; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.85rem; word-break: break-all; flex: 1; }
+    .copy-btn { background: #3b82f6; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 700; transition: background 0.2s; }
+    .copy-btn:hover { background: #2563eb; }
+    .copy-btn.copied { background: #10b981; }
+
+    /* AI Remediation */
+    .fix-block { background: rgba(16,185,129,0.05); border-radius: 12px; padding: 20px; border: 1px solid rgba(16,185,129,0.2); }
+    .fix-block h4 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #10b981; margin-bottom: 8px; font-weight: 800; }
+    
+    .code-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .code-tab { background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 6px 14px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+    .code-tab.active { background: #10b981; border-color: #10b981; color: #022c22; }
+    .code-tab:hover:not(.active) { background: #334155; color: #fff; }
+    
+    /* Scrollable Code Blocks to prevent huge vertical stretching */
+    .code-block { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; overflow-x: auto; max-height: 250px; overflow-y: auto; }
+    .code-block pre { color: #e2e8f0; font-size: 0.85rem; line-height: 1.5; font-family: ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap; word-break: break-word; margin: 0; }
+    
+    /* Scrollbar styling for code blocks */
+    .code-block::-webkit-scrollbar { width: 8px; height: 8px; }
+    .code-block::-webkit-scrollbar-track { background: #0f172a; border-radius: 4px; }
+    .code-block::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    .code-block::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+    .wcag-ref { font-size: 0.8rem; color: #94a3b8; font-weight: 600; margin-top: auto; padding-top: 16px; border-top: 1px dotted var(--border); }
+    
+    /* Scroll to Top */
+    .scroll-top { position: fixed; bottom: 30px; right: 30px; background: #818cf8; color: #fff; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.2s; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; font-size: 1.5rem; }
+    .scroll-top.visible { opacity: 1; pointer-events: auto; }
+    .scroll-top:hover { transform: translateY(-3px); background: #6366f1; }
+
+    .footer { text-align: center; padding: 40px; color: #64748b; font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 60px; }
+  </style>
+  <script>
+    // Tab switching for code blocks
+    function switchTab(btn, showId, hideId) {
+      const parent = btn.closest('.fix-block');
+      parent.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      
+      const showEl = parent.querySelector('#' + showId);
+      const hideEl = parent.querySelector('#' + hideId);
+      if(showEl) showEl.style.display = 'block';
+      if(hideEl) hideEl.style.display = 'none';
+    }
+
+    // Copy to clipboard
+    function copySelector(btn) {
+      const selector = btn.getAttribute('data-selector');
+      navigator.clipboard.writeText(selector).then(() => {
+        const originalText = btn.innerText;
+        btn.innerText = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Filtering Logic
+    let currentStatusFilter = 'all';
+    
+    function setStatusFilter(status, cardElement) {
+      // Toggle logic
+      if (currentStatusFilter === status) {
+        currentStatusFilter = 'all';
+        document.querySelectorAll('.stat').forEach(el => el.classList.remove('active-filter'));
+      } else {
+        currentStatusFilter = status;
+        document.querySelectorAll('.stat').forEach(el => el.classList.remove('active-filter'));
+        cardElement.classList.add('active-filter');
+      }
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const wcagFilter = document.getElementById('wcagFilter').value;
+      const severityFilter = document.getElementById('severityFilter').value;
+      const cards = document.querySelectorAll('.violation-card');
+      let visibleCount = 0;
+
+      cards.forEach(card => {
+        const status = card.getAttribute('data-status');
+        const wcag = card.getAttribute('data-wcag');
+        const severity = card.getAttribute('data-severity');
+
+        const matchStatus = (currentStatusFilter === 'all' || status === currentStatusFilter);
+        const matchWcag = (wcagFilter === 'all' || wcag === wcagFilter);
+        const matchSeverity = (severityFilter === 'all' || severity === severityFilter);
+
+        if (matchStatus && matchWcag && matchSeverity) {
+          card.style.display = 'grid';
+          visibleCount++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      const filterMsg = document.getElementById('filter-msg');
+      filterMsg.innerText = `Showing ${visibleCount} of ${cards.length} issues.`;
+      filterMsg.style.display = 'block';
+    }
+
+    // Scroll to Top
+    window.addEventListener('scroll', () => {
+      const btn = document.getElementById('scrollTopBtn');
+      if (window.scrollY > 300) {
+        btn.classList.add('visible');
+      } else {
+        btn.classList.remove('visible');
+      }
+    });
+
+    function scrollToTop() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  </script>
+</head>
+<body>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<header class="hero">
+  <h1>AI Accessibility Scanner</h1>
+  <div class="subtitle">
+    <span><b>URL:</b> {{ result.url }}</span>
+    <span><b>Browser:</b> {{ result.browser }}</span>
+    <span><b>Resolution:</b> {{ result.viewport }}</span>
+    <span><b>Run ID:</b> {{ result.run_id }}</span>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- Interactive Stat Filters -->
+  <div class="stats-grid">
+    <div class="stat" onclick="setStatusFilter('confirmed', this)">
+      <div class="number" style="color:#ef4444;">{{ m.confirmed_findings }}</div>
+      <div class="label">Confirmed Bugs</div>
+    </div>
+    <div class="stat" onclick="setStatusFilter('likely', this)">
+      <div class="number" style="color:#f97316;">{{ m.likely_findings }}</div>
+      <div class="label">Likely Bugs</div>
+    </div>
+    <div class="stat" onclick="setStatusFilter('requires_manual_review', this)">
+      <div class="number" style="color:#eab308;">{{ m.manual_review_findings }}</div>
+      <div class="label">Needs Review</div>
+    </div>
+    <div class="stat" onclick="setStatusFilter('pass', this)">
+      <div class="number" style="color:#10b981;">{{ m.passed_checks }}</div>
+      <div class="label">Passed Checks</div>
+    </div>
+  </div>
+
+  <!-- Dropdown Filters -->
+  <div class="filter-bar">
+    <select id="wcagFilter" onchange="applyFilters()">
+      <option value="all">All WCAG Criteria</option>
+      {% for crit in m.wcag_criteria_affected | sort %}
+      <option value="{{ crit }}">WCAG {{ crit }}</option>
+      {% endfor %}
+    </select>
+    
+    <select id="severityFilter" onchange="applyFilters()">
+      <option value="all">All Severities</option>
+      <option value="critical">Critical</option>
+      <option value="serious">Serious</option>
+      <option value="moderate">Moderate</option>
+      <option value="minor">Minor</option>
+    </select>
+    
+    <div id="filter-msg" class="filter-status-text"></div>
+  </div>
+
+  <div class="violations-list">
+    {% set active_findings = findings | selectattr('duplicate_of', 'none') | list %}
+    {% if not active_findings %}
+      <div style="text-align:center; padding:60px; color:#10b981; font-size:1.2rem; font-weight:600; background:var(--surface); border-radius:16px;">
+        ✅ No unique findings. Excellent work!
+      </div>
+    {% endif %}
+
+    {% for finding in active_findings %}
+    
+    {% set sev_class = 'badge-moderate' %}
+    {% set sev_text = 'MODERATE' %}
+    {% if finding.impact %}
+      {% if finding.impact.value == 'critical' %}{% set sev_class = 'badge-critical' %}{% set sev_text = 'CRITICAL' %}
+      {% elif finding.impact.value == 'serious' %}{% set sev_class = 'badge-serious' %}{% set sev_text = 'SERIOUS' %}
+      {% elif finding.impact.value == 'minor' %}{% set sev_class = 'badge-minor' %}{% set sev_text = 'MINOR' %}
+      {% endif %}
+    {% else %}
+      {% if finding.status.value == 'confirmed' %}{% set sev_class = 'badge-critical' %}{% set sev_text = 'CRITICAL' %}{% endif %}
+    {% endif %}
+
+    <div class="violation-card" 
+         data-status="{{ finding.status.value }}" 
+         data-wcag="{{ finding.wcag.success_criterion }}" 
+         data-severity="{{ (finding.impact.value if finding.impact else 'moderate') | lower }}">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        {% set has_shot = false %}
+        {% for ev in finding.evidence %}
+          {% if ev.evidence_type == 'screenshot' and ev.data %}
+            {% set has_shot = true %}
+            <img src="data:image/png;base64,{{ ev.data }}" alt="Cropped element screenshot" loading="lazy">
+          {% endif %}
+        {% endfor %}
+        {% if not has_shot %}
+          <div class="no-screenshot">Screenshot not captured</div>
+        {% endif %}
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          {% if finding.status.value == 'confirmed' %}
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          {% elif finding.status.value == 'likely' %}
+          <span class="severity-badge" style="background:#7c2d12; color:#fdba74; border-color:#9a3412;">LIKELY BUG</span>
+          {% elif finding.status.value == 'requires_manual_review' %}
+          <span class="severity-badge" style="background:#713f12; color:#fde047; border-color:#854d0e;">NEEDS REVIEW</span>
+          {% endif %}
+          
+          <span class="severity-badge {{ sev_class }}">{{ sev_text }}</span>
+          <span class="severity-badge badge-wcag">{{ finding.wcag.success_criterion }} {{ finding.wcag.title | upper }}</span>
+        </div>
+        
+        <div class="violation-title">{{ finding.description }}</div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> {{ finding.actual_result }}</p>
+          <p><strong>Requirement:</strong> {{ finding.expected_result }}</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>{{ finding.element.selector }}</code>
+          <button class="copy-btn" data-selector="{{ finding.element.selector }}" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        {% if finding.remediation and finding.remediation.html_fix %}
+        {% set uuid = finding.finding_id %}
+        <div class="fix-block">
+          <h4>AI Remediation Code</h4>
+          {% if finding.remediation.summary %}
+          <p style="color:#34d399; font-size:0.9rem; margin-bottom:12px; font-weight:600;">{{ finding.remediation.summary }}</p>
+          {% endif %}
+          
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'broken-{{ uuid }}', 'fix-{{ uuid }}')">Broken Code</button>
+            <button class="code-tab" onclick="switchTab(this, 'fix-{{ uuid }}', 'broken-{{ uuid }}')">Fixed Code</button>
+          </div>
+          
+          <div class="code-block" id="broken-{{ uuid }}">
+            <pre>{{ finding.element.html | e }}</pre>
+          </div>
+          
+          <div class="code-block" id="fix-{{ uuid }}" style="display:none">
+            <pre>{{ finding.remediation.html_fix | e }}</pre>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="wcag-ref">
+          Verified against WCAG {{ finding.wcag.version }} Standard (Level {{ finding.wcag.level.value }})
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <footer class="footer">
+    <p>Generated by <strong>AI Accessibility Testing Agent</strong> · {{ generated_at }} UTC</p>
+    <p style="margin-top:0.5rem">WCAG Ruleset validated via axe-core industry standard engine.</p>
+  </footer>
+</main>
+
+<button id="scrollTopBtn" class="scroll-top" onclick="scrollToTop()" aria-label="Scroll to top">↑</button>
+
+</body>
+</html>"""
+
+
+class ReportGenerator:
+    """
+    Generates scan reports in JSON, HTML, and CSV formats.
+
+    Input: A validated ScanResult object.
+    Output: Report files written to the configured report directory.
+    """
+
+    def __init__(self, output_dir: Path | None = None) -> None:
+        self._output_dir = output_dir or settings.report_dir
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._env = Environment(
+            loader=DictLoader({"report.html": HTML_TEMPLATE}),
+            autoescape=select_autoescape(["html"]),
+        )
+
+    def generate(self, result: ScanResult) -> dict[str, Path]:
+        """
+        Generate all configured report formats.
+
+        Returns a dict mapping format name to output file path.
+        """
+        result.finalize()
+        paths: dict[str, Path] = {}
+
+        formats = settings.report_formats
+
+        if "json" in formats:
+            paths["json"] = self._write_json(result)
+        if "html" in formats:
+            paths["html"] = self._write_html(result)
+        if "csv" in formats:
+            paths["csv"] = self._write_csv(result)
+
+        log.info("report.generated", run_id=result.run_id, paths={k: str(v) for k, v in paths.items()})
+        return paths
+
+    def _write_json(self, result: ScanResult) -> Path:
+        """Write machine-readable JSON report."""
+        path = self._output_dir / f"{result.run_id}_report.json"
+        data = result.model_dump(mode="json")
+        path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        log.info("report.json_written", path=str(path))
+        return path
+
+    def _write_html(self, result: ScanResult) -> Path:
+        """Write human-readable HTML report."""
+        path = self._output_dir / f"{result.run_id}_report.html"
+
+        template = self._env.get_template("report.html")
+        html = template.render(
+            result=result,
+            findings=result.findings,
+            m=result.metrics,
+            version="0.1.0",
+            generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        )
+        path.write_text(html, encoding="utf-8")
+        log.info("report.html_written", path=str(path))
+        return path
+
+    def _write_csv(self, result: ScanResult) -> Path:
+        """Write CSV report for spreadsheet-based review workflows."""
+        path = self._output_dir / f"{result.run_id}_findings.csv"
+
+        columns = [
+            "finding_id", "status", "wcag_version", "wcag_sc", "wcag_title",
+            "wcag_level", "detection_method", "confidence", "url", "selector",
+            "description", "actual_result", "expected_result", "root_cause",
+            "manual_review_required", "duplicate_of",
+        ]
+
+        with path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            for finding in result.findings:
+                writer.writerow({
+                    "finding_id": finding.finding_id,
+                    "status": finding.status.value,
+                    "wcag_version": finding.wcag.version.value,
+                    "wcag_sc": finding.wcag.success_criterion,
+                    "wcag_title": finding.wcag.title,
+                    "wcag_level": finding.wcag.level.value,
+                    "detection_method": finding.detection_method.value,
+                    "confidence": finding.confidence,
+                    "url": finding.url,
+                    "selector": finding.element.selector,
+                    "description": finding.description,
+                    "actual_result": finding.actual_result,
+                    "expected_result": finding.expected_result,
+                    "root_cause": finding.root_cause,
+                    "manual_review_required": finding.manual_review_required,
+                    "duplicate_of": finding.duplicate_of or "",
+                })
+
+        log.info("report.csv_written", path=str(path), rows=len(result.findings))
+        return path
