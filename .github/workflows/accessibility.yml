@@ -25,7 +25,7 @@ jobs:
           
       - name: Install AI Accessibility Agent
         run: |
-          pip install -e tools/accessibility-agent
+          pip install groq -e tools/accessibility-agent
           playwright install chromium --with-deps
           
       - name: Start local test server
