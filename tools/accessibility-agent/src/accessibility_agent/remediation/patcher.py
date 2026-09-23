@@ -414,14 +414,20 @@ class PatchGenerator:
         strategy = plan.fix_strategy.lower()
         for tag in ("button", "input", "select", "textarea", "img", "html",
                     "head", "a", "div", "span", "p", "title", "label"):
-            if f"<{tag}" in strategy or f" {tag} " in strategy or strategy.startswith(tag):
+            if re.search(rf"<{tag}\b", strategy) or re.search(rf"\b{tag}\s+element", strategy) or re.search(rf"\btag\s+{tag}\b", strategy) or strategy.startswith(f"{tag} "):
                 return tag
+            # A more restricted check for " a " since "a" is a common english word
+            if tag != "a" and (f" {tag} " in strategy):
+                return tag
+            if tag == "a" and (re.search(rf"<{tag}>", strategy) or "anchor tag" in strategy or "anchor element" in strategy):
+                return tag
+
         # Try target_attribute hints
         if plan.target_attribute == "lang":
             return "html"
         if plan.target_attribute == "alt":
             return "img"
-        if plan.target_attribute in ("aria-label", "aria-labelledby"):
+        if plan.target_attribute in ("aria-label", "aria-labelledby", "aria-hidden"):
             return ""  # Could be any element
         return ""
 

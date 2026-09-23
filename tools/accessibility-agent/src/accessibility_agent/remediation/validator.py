@@ -154,7 +154,6 @@ class PatchValidator:
         result.no_invalid_aria = True
         result.no_new_contradictions = True
         result.is_valid = True
-        return result
 
         language = Path(patch.target_file).suffix.lstrip(".")
 
