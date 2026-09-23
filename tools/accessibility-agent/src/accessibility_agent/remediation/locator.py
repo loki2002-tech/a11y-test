@@ -346,9 +346,22 @@ class SourceLocator:
             
             if fallback_path:
                 if (self._repo / fallback_path).exists():
+                    fallback_file = self._repo / fallback_path
+                    line_num = 1
+                    try:
+                        from bs4 import BeautifulSoup
+                        html_content = fallback_file.read_text(encoding='utf-8')
+                        soup = BeautifulSoup(html_content, 'html.parser')
+                        if selector:
+                            el = soup.select_one(selector)
+                            if el and getattr(el, 'sourceline', None):
+                                line_num = el.sourceline
+                    except Exception:
+                        pass
+
                     candidates.append(_RawMatch(
-                        file_path=self._repo / fallback_path,
-                        line_number=1,
+                        file_path=fallback_file,
+                        line_number=line_num,
                         line_content="",
                         strategy="evidence_fallback",
                         score=0.5
