@@ -259,14 +259,27 @@ def classify_relationship(
     if sc_being_fixed == sc_of_pattern:
         return SCRelationship.COMPATIBLE
 
-    # Unconditional conflict patterns are ALWAYS ACTUAL_CONFLICT —
-    # these patterns are so dangerous that no SC relationship classification
-    # can downgrade them to a warning or skip.
-    #   Pattern index 0: aria-hidden="true" on an interactive element (violates 4.1.2)
-    #   Pattern index 1: role="presentation" on a semantic element (violates 1.3.1)
-    #   Pattern index 4: <div>/<span> with onclick but no role (violates 4.1.2)
+    # Unconditional conflict patterns are dangerous, BUT only flag as ACTUAL_CONFLICT
+    # if the SC being fixed is actually related to the pattern's SC.
+    # For example: fixing html-has-lang (3.1.1) should never be blocked because
+    # the page already has aria-hidden somewhere (pattern 0 → violates 4.1.2).
+    # We only block if the relationship table says these SCs actually interact.
     if pattern_index in (0, 1, 4):
-        return SCRelationship.ACTUAL_CONFLICT
+        # Pattern 0, 4 → violates 4.1.2; Pattern 1 → violates 1.3.1
+        pattern_sc = "4.1.2" if pattern_index in (0, 4) else "1.3.1"
+        key = (sc_being_fixed, pattern_sc)
+        rel = SC_RELATIONSHIPS.get(key)
+        if rel is not None and rel not in (
+            SCRelationship.UNRELATED,
+            SCRelationship.COMPATIBLE,
+            SCRelationship.RELATED,
+        ):
+            return SCRelationship.ACTUAL_CONFLICT
+        # If the table says UNRELATED/COMPATIBLE/RELATED → not a real conflict
+        if rel in (SCRelationship.UNRELATED, SCRelationship.COMPATIBLE, SCRelationship.RELATED):
+            return rel
+        # No entry in table → use POTENTIALLY_INTERACTING (warning, not block)
+        return SCRelationship.POTENTIALLY_INTERACTING
 
     # Look up explicit relationship
     key = (sc_being_fixed, sc_of_pattern)

@@ -60,20 +60,30 @@ jobs:
               r = json.load(open(files[-1]))
               # Get all confirmed findings that are not color-contrast
               findings = [f for f in r['findings'] if f.get('status') == 'confirmed' and f.get('rule_id') != 'color-contrast']
-              for i, finding in enumerate(findings):
+              # Deduplicate by finding_id — keep only the first occurrence
+              seen = set()
+              unique = []
+              for f in findings:
+                  fid = f.get('finding_id')
+                  if fid and fid not in seen:
+                      seen.add(fid)
+                      unique.append(f)
+              print(f'Total unique findings to remediate: {len(unique)}')
+              for i, finding in enumerate(unique):
                   print(f'Found finding: {finding[\"finding_id\"]}')
-                  with open(f'finding_{i}.json', 'w') as f:
-                      json.dump(finding, f)
+                  with open(f'finding_{i}.json', 'w') as out:
+                      json.dump(finding, out)
           except Exception as e:
               print('Error:', e)
           "
           
-          # 3. Trigger the remediation agent for each finding
+          # 3. Trigger the remediation agent for each finding (with delay to avoid rate limits)
           for file in finding_*.json; do
             if [ -f "$file" ]; then
               echo "Triggering Remediation Agent for $file..."
               python -m accessibility_agent.cli remediate \
                 --finding "$file" \
                 --repo .
+              sleep 3
             fi
           done
