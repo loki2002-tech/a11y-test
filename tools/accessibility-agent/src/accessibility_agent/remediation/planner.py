@@ -89,6 +89,76 @@ _SAFE_TEMPLATES: dict[tuple[str, str], dict[str, str]] = {
     },
 }
 
+# ── Valid HTML/ARIA attribute names — used to validate LLM output ─────────────
+# Any target_attribute not in this set (and not empty / __REPLACE_ELEMENT__) is rejected.
+_VALID_HTML_ATTRIBUTES = {
+    # ARIA
+    "aria-label", "aria-labelledby", "aria-describedby", "aria-hidden",
+    "aria-live", "aria-atomic", "aria-relevant", "aria-busy",
+    "aria-required", "aria-invalid", "aria-expanded", "aria-selected",
+    "aria-checked", "aria-pressed", "aria-disabled", "aria-readonly",
+    "aria-multiselectable", "aria-orientation", "aria-haspopup",
+    "aria-controls", "aria-owns", "aria-flowto", "aria-activedescendant",
+    "aria-autocomplete", "aria-level", "aria-multiline", "aria-placeholder",
+    "aria-roledescription", "aria-rowcount", "aria-rowindex", "aria-rowspan",
+    "aria-colcount", "aria-colindex", "aria-colspan", "aria-setsize",
+    "aria-posinset", "aria-valuemin", "aria-valuemax", "aria-valuenow",
+    "aria-valuetext", "aria-modal", "aria-sort",
+    # Common HTML
+    "role", "lang", "alt", "title", "tabindex", "type", "value",
+    "src", "href", "for", "id", "class", "name", "placeholder",
+    "required", "disabled", "readonly", "checked", "selected",
+    "multiple", "size", "maxlength", "minlength", "pattern",
+    "action", "method", "enctype", "target", "rel", "download",
+    "width", "height", "colspan", "rowspan", "scope", "headers",
+    "summary", "caption", "abbr", "axis",
+    "autocomplete", "autofocus", "autoplay", "controls", "loop", "muted",
+    "poster", "preload", "kind", "srclang", "label", "default",
+    "frameborder", "allowfullscreen", "sandbox", "loading",
+    "decoding", "crossorigin", "integrity", "referrerpolicy",
+    "data-*",  # wildcard — checked separately
+    # Form
+    "accept", "accept-charset", "enctype", "novalidate",
+    "inputmode", "enterkeyhint", "spellcheck", "contenteditable",
+    "draggable", "translate", "hidden",
+    # WCAG / landmark specific
+    "tabindex", "accesskey", "dir", "xml:lang",
+}
+
+# HTML tag names that LLMs sometimes incorrectly use as attribute names
+_TAG_NAMES_MISTAKEN_AS_ATTRS = {
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "p", "div", "span", "section", "article", "aside", "main",
+    "header", "footer", "nav", "form", "input", "button", "select",
+    "textarea", "label", "table", "tr", "td", "th", "ul", "ol", "li",
+    "marquee", "blink", "tag", "element", "content", "text",
+    "heading", "paragraph", "anchor", "link",
+}
+
+
+def _is_valid_target_attribute(attr: str) -> bool:
+    """Return True if attr is an acceptable target_attribute value."""
+    if not attr:
+        return True  # empty = element insertion mode
+    if attr == "__REPLACE_ELEMENT__":
+        return True
+    # Allow pipe-separated multi-attribute: "role|aria-label"
+    parts = attr.split("|")
+    for part in parts:
+        part = part.strip()
+        if part in _TAG_NAMES_MISTAKEN_AS_ATTRS:
+            return False
+        if part in _VALID_HTML_ATTRIBUTES:
+            continue
+        if part.startswith("data-"):
+            continue
+        # Unknown attribute — allow it (real HTML has many attributes)
+        # but reject tag names we know are wrong
+        if re.match(r"^[a-zA-Z][a-zA-Z0-9_-]*$", part):
+            continue
+        return False
+    return True
+
 
 class RemediationPlanner:
     """
@@ -276,6 +346,24 @@ class RemediationPlanner:
                 log.warning("planner.llm_incomplete_response", finding_id=finding_id)
                 return None
 
+            # ── CRITICAL: Validate target_attribute ───────────────────────────
+            target_attr = raw.get("target_attribute", "").strip()
+            target_val = raw.get("target_value", "").strip()
+
+            if not _is_valid_target_attribute(target_attr):
+                log.warning(
+                    "planner.invalid_target_attribute_rejected",
+                    finding_id=finding_id,
+                    target_attribute=target_attr,
+                )
+                # Route to manual review — don't inject garbage into the HTML
+                return self._manual_review_plan(
+                    finding_id, finding_data, ctx,
+                    RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED,
+                    confidence * 0.5, "llm_validation_failed",
+                    wcag_sc, wcag_level, wcag_title,
+                )
+
             # Map risk level
             risk = str(raw.get("risk_level", "medium")).lower()
             if risk not in ("low", "medium", "high"):
@@ -298,8 +386,8 @@ class RemediationPlanner:
                 root_cause=root_cause,
                 fix_strategy=fix_strategy,
                 expected_change_description=raw.get("expected_change", ""),
-                target_attribute=raw.get("target_attribute", ""),
-                target_value=raw.get("target_value", ""),
+                target_attribute=target_attr,
+                target_value=target_val,
                 risk_level=risk,
                 risk_assessment=raw.get("risk_assessment", ""),
                 wcag_criterion=wcag_sc,
@@ -463,22 +551,50 @@ You MUST produce a DIFFERENT fix strategy that avoids this failure.
 
 ## Your Task
 
-Produce a precise remediation plan as a JSON object. Rules:
-1. The fix must be the MINIMUM change that resolves the violation.
-2. Do not change unrelated code.
-3. Do not invent content you cannot infer from the context.
-4. The target_attribute and target_value must be the exact attribute name and value to add/modify.
-5. If the fix is to REMOVE an attribute, set target_value to "" (empty string).
+Produce a precise remediation plan as a JSON object.
+
+### CRITICAL RULES — READ ALL BEFORE RESPONDING:
+
+**RULE 1 — target_attribute MUST be a real HTML/ARIA attribute name.**
+VALID examples: `aria-label`, `lang`, `alt`, `role`, `for`, `tabindex`,
+`aria-labelledby`, `aria-hidden`, `title`, `type`, `value`, `src`, `href`,
+`scope`, `aria-live`, `aria-required`, `aria-describedby`
+NEVER USE tag names as attributes: h1, h2, p, div, span, marquee, section, nav
+NEVER USE made-up words: tag, element, content, text, heading, paragraph
+
+**RULE 2 — To INSERT a new element (e.g. add an h1 heading, add a label):**
+- Set `target_attribute` to `""` (empty string)
+- Set `target_value` to the complete HTML to insert, e.g. `"<h1>ShopNow</h1>"`
+- Set `problem_type` to `"missing_markup"`
+- Describe WHERE to insert clearly in `fix_strategy`
+
+**RULE 3 — To REPLACE one element with another (e.g. marquee → p, div → button):**
+- Set `target_attribute` to `"__REPLACE_ELEMENT__"`
+- Set `target_value` to the FULL replacement element with same text content,
+  e.g. `"<p class=\\"marquee-text\\">Free shipping on orders over $50!</p>"`
+- Set `problem_type` to `"missing_markup"`
+
+**RULE 4 — To add ONE attribute (e.g. aria-label, lang, alt, role):**
+- Set `target_attribute` to the exact attribute name (e.g. `"aria-label"`)
+- Set `target_value` to the exact value (e.g. `"Search"`)
+
+**RULE 5 — To add TWO attributes simultaneously (e.g. role + aria-label):**
+- Set `target_attribute` to `"role|aria-label"` (pipe-separated)
+- Set `target_value` to `"region|Hero Banner"` (pipe-separated, same order)
+
+**RULE 6 — To REMOVE an attribute:** Set `target_value` to `"__REMOVE__"`.
+
+**RULE 7 — Minimum change only.** Do not touch unrelated code.
 
 Respond with ONLY this JSON (no markdown, no explanation outside the JSON):
 
 {{
   "problem_type": "{ctx.problem_type.value}",
   "root_cause": "Clear sentence explaining why this is a WCAG violation",
-  "fix_strategy": "Exact description of the code change: what attribute/element to add/modify/remove",
+  "fix_strategy": "Exact description: what element/attribute to add/modify/remove and where",
   "expected_change": "One-line human summary, e.g. 'Add aria-label=\\"Register\\" to button on line 36'",
-  "target_attribute": "The HTML attribute to add/modify, e.g. 'aria-label', 'lang', 'alt'",
-  "target_value": "The exact value to set, or empty string to remove the attribute",
+  "target_attribute": "Real HTML/ARIA attribute, or empty string for element insert, or __REPLACE_ELEMENT__ for element swap, or pipe-separated for multi-attribute",
+  "target_value": "Exact value, complete new element HTML, or __REMOVE__",
   "risk_level": "low|medium|high",
   "risk_assessment": "What could go wrong with this specific fix",
   "requires_tests": [],

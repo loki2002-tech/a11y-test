@@ -177,7 +177,11 @@ class PatchGenerator:
         if is_css or plan.problem_type == ProblemType.FOCUS_VISIBILITY:
             return self._strategy_line_replacement(plan, location, original_lines)
 
-        # Missing element (title, label) → element insertion
+        # Element replacement (marquee → p, div → button, etc.)
+        if plan.target_attribute == "__REPLACE_ELEMENT__":
+            return self._strategy_element_replacement(plan, location, original_lines)
+
+        # Missing element (title, label, h1) → element insertion
         if (
             plan.problem_type == ProblemType.MISSING_MARKUP
             and not plan.target_attribute
@@ -185,11 +189,15 @@ class PatchGenerator:
         ):
             return self._strategy_element_insertion(plan, location, original_lines)
 
-        # Attribute operation (add/modify/remove) → attribute injection
+        # Multi-attribute injection (pipe-separated: "role|aria-label")
+        if plan.target_attribute and "|" in plan.target_attribute:
+            return self._strategy_multi_attribute_injection(plan, location, original_lines)
+
+        # Single attribute operation (add/modify/remove) → attribute injection
         if plan.target_attribute:
             return self._strategy_attribute_injection(plan, location, original_lines)
 
-        # Fallback: try attribute injection if we have a target_attribute
+        # Fallback
         return None
 
     @staticmethod
@@ -277,6 +285,7 @@ class PatchGenerator:
         Use cases:
           - Insert <title>App Name</title> inside <head>
           - Insert <label for="id">Label text</label> before an <input>
+          - Insert <h1>ShopNow</h1> as first child of <body>
         """
         # Determine what to insert
         new_element = self._build_new_element(plan)
@@ -298,6 +307,156 @@ class PatchGenerator:
 
         patched = list(original_lines)
         patched.insert(insert_after_idx + 1, new_line)
+        return patched
+
+    # ── Strategy 3: Element Replacement ───────────────────────────────────────
+
+    def _strategy_element_replacement(
+        self,
+        plan: RemediationPlan,
+        location: SourceLocation,
+        original_lines: list[str],
+    ) -> list[str] | None:
+        """
+        Replace an entire element (opening tag, content, closing tag) with a
+        different element. Used for: <marquee> → <p>, <div onclick> → <button>, etc.
+
+        The new element HTML is taken directly from plan.target_value.
+        """
+        new_html = plan.target_value.strip()
+        if not new_html:
+            log.warning("patcher.element_replacement.no_target_value", finding_id=plan.finding_id)
+            return None
+
+        anchor = max(0, location.start_line - 1)
+        search_start = max(0, anchor - 10)
+        search_end = min(len(original_lines), anchor + 10)
+
+        # Find the old element's opening tag line
+        old_tag = self._expected_tag_for_replacement(plan)
+        old_line_idx = None
+
+        # Search from anchor outward
+        search_indices = []
+        for offset in range(11):
+            if offset == 0:
+                if 0 <= anchor < len(original_lines):
+                    search_indices.append(anchor)
+            else:
+                if 0 <= anchor + offset < len(original_lines):
+                    search_indices.append(anchor + offset)
+                if 0 <= anchor - offset < len(original_lines):
+                    search_indices.append(anchor - offset)
+
+        for i in search_indices:
+            line = original_lines[i]
+            if old_tag and re.search(rf"<{re.escape(old_tag)}\b", line, re.IGNORECASE):
+                old_line_idx = i
+                break
+            # If no specific tag, match any opening tag near anchor
+            if not old_tag and re.search(r"<[a-zA-Z]", line):
+                old_line_idx = i
+                break
+
+        if old_line_idx is None:
+            log.warning(
+                "patcher.element_replacement.old_element_not_found",
+                finding_id=plan.finding_id,
+                old_tag=old_tag,
+            )
+            return None
+
+        # Find the closing tag to know the span of the old element
+        old_tag_end_idx = old_line_idx
+        if old_tag:
+            # Search forward for closing tag
+            for j in range(old_line_idx, min(len(original_lines), old_line_idx + 20)):
+                if re.search(rf"</{re.escape(old_tag)}\s*>", original_lines[j], re.IGNORECASE):
+                    old_tag_end_idx = j
+                    break
+                # Self-closing or single line
+                if j == old_line_idx and re.search(r"/>", original_lines[j]):
+                    old_tag_end_idx = j
+                    break
+
+        # Preserve original indentation
+        orig_indent = re.match(r"^(\s*)", original_lines[old_line_idx]).group(1)
+        new_line = f"{orig_indent}{new_html}\n"
+
+        patched = list(original_lines)
+        # Replace the old element span with the new element
+        patched[old_line_idx:old_tag_end_idx + 1] = [new_line]
+
+        log.info(
+            "patcher.element_replacement.done",
+            finding_id=plan.finding_id,
+            old_tag=old_tag,
+            old_lines=f"{old_line_idx}-{old_tag_end_idx}",
+        )
+        return patched
+
+    @staticmethod
+    def _expected_tag_for_replacement(plan: RemediationPlan) -> str:
+        """Extract the old element's tag name from fix_strategy for element replacement."""
+        strategy = plan.fix_strategy.lower()
+        # Look for "replace <X>" or "replace the <X>" patterns
+        m = re.search(r"replace\s+(?:the\s+)?<([a-zA-Z][a-zA-Z0-9]*)[\s>]", strategy)
+        if m:
+            return m.group(1)
+        # Look for "<marquee>" or similar tag mentions
+        m = re.search(r"<([a-zA-Z][a-zA-Z0-9]*)\b", strategy)
+        if m:
+            return m.group(1)
+        return ""
+
+    # ── Strategy 4: Multi-Attribute Injection ─────────────────────────────────
+
+    def _strategy_multi_attribute_injection(
+        self,
+        plan: RemediationPlan,
+        location: SourceLocation,
+        original_lines: list[str],
+    ) -> list[str] | None:
+        """
+        Inject multiple attributes at once using pipe-separated target_attribute/value.
+
+        Example: target_attribute="role|aria-label", target_value="region|Hero Banner"
+        → Adds role="region" aria-label="Hero Banner" to the target element.
+        """
+        attrs = [a.strip() for a in plan.target_attribute.split("|")]
+        values = [v.strip() for v in plan.target_value.split("|")]
+
+        if len(attrs) != len(values):
+            log.warning(
+                "patcher.multi_attr.mismatch",
+                finding_id=plan.finding_id,
+                attrs=attrs,
+                values=values,
+            )
+            return None
+
+        # Find the target element's opening tag
+        tag_start_idx, tag_end_idx = self._find_tag_span(plan, location, original_lines)
+        if tag_start_idx is None:
+            log.warning("patcher.multi_attr.tag_not_found", finding_id=plan.finding_id)
+            return None
+
+        patched = list(original_lines)
+        tag_lines = original_lines[tag_start_idx:tag_end_idx + 1]
+        tag_text = "".join(tag_lines)
+
+        # Apply each attribute in sequence
+        for attr, value in zip(attrs, values):
+            existing = self._find_attribute_value(tag_text, attr)
+            if value == REMOVE_SENTINEL:
+                tag_text = self._remove_attribute(tag_text, attr)
+            elif existing is not None:
+                tag_text = self._replace_attribute_value(tag_text, attr, value)
+            else:
+                tag_text = self._add_attribute(tag_text, attr, value, location.language)
+
+        new_tag_lines = self._restore_lines(tag_text, tag_lines)
+        patched[tag_start_idx:tag_end_idx + 1] = new_tag_lines
         return patched
 
     # ── Strategy 3: Line Replacement ──────────────────────────────────────────
