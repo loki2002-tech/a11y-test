@@ -36,6 +36,7 @@ jobs:
       - name: Run Scan & Auto-Remediate
         env:
           A11Y_LLM_PROVIDER: groq
+          A11Y_LLM_MODEL: llama3-70b-8192
           A11Y_GROQ_API_KEYS: ${{ secrets.GROQ_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
