@@ -42,7 +42,7 @@ jobs:
           python -m accessibility_agent.cli scan \
             --url http://localhost:8080/index.html \
             --mode automated \
-            --output-dir ./reports
+            --output ./reports
           
           # 2. Check for findings
           echo "Looking for findings..."
