@@ -3,8 +3,6 @@ name: AI Accessibility Auto-Remediation
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: write
@@ -38,7 +36,8 @@ jobs:
           A11Y_LLM_PROVIDER: groq
           A11Y_LLM_MODEL: openai/gpt-oss-120b
           A11Y_GROQ_API_KEYS: ${{ secrets.GROQ_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN != '' && secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           # 0. Configure Git identity
           git config --global user.name "accessibility-agent[bot]"
