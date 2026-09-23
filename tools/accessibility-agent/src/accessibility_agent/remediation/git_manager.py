@@ -312,7 +312,7 @@ class GitManager:
             return True
 
         push_out = self._git(
-            ["push", self._remote, branch_name, "--force-with-lease"]
+            ["push", self._remote, branch_name, "--force"]
         )
         if push_out is None:
             result.error = f"git push to '{branch_name}' failed"
