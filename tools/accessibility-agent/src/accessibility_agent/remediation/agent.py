@@ -213,7 +213,7 @@ class RemediationAgent:
             result.attempts = attempt
             log.info("agent.attempt", finding_id=finding.finding_id, attempt=attempt)
 
-            plan = self._plan(finding_data, source_location, attempt)
+            plan = self._plan(finding_data, source_location, classification, attempt)
             if plan is None:
                 continue
             if plan.requires_manual_review:
@@ -374,11 +374,23 @@ class RemediationAgent:
         self,
         finding_data: dict,
         source_location: SourceLocation,
+        classification: RemediationAutomationLevel,
         attempt: int,
     ) -> RemediationPlan | None:
         try:
+            import asyncio
             source_context = self._analyzer.analyze(source_location, finding_data)
-            plan = self._planner.plan(finding_data, source_context, attempt=attempt)
+            plan = asyncio.run(
+                self._planner.plan(
+                    finding_data=finding_data,
+                    location=source_location,
+                    source_context=source_context,
+                    automation_level=classification,
+                    classification_confidence=0.9,
+                    classified_by="agent",
+                    attempt_number=attempt,
+                )
+            )
             log.info("agent.planned", strategy=plan.fix_strategy[:60])
             return plan
         except Exception as exc:

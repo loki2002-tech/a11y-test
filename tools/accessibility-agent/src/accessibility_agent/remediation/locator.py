@@ -326,8 +326,24 @@ class SourceLocator:
         )
 
         if not candidates:
-            log.warning("source_locator.not_found", finding_id=finding_id)
-            return self._not_found_result()
+            # Fallback to evidence file_path if available
+            fallback_path = None
+            for ev in finding_data.get("evidence", []):
+                if ev.get("file_path"):
+                    fallback_path = ev["file_path"]
+                    break
+            
+            if fallback_path:
+                candidates.append(_RawMatch(
+                    file_path=self._repo / fallback_path,
+                    line_number=1,
+                    line_content="",
+                    strategy="evidence_fallback",
+                    score=0.5
+                ))
+            else:
+                log.warning("source_locator.not_found", finding_id=finding_id)
+                return self._not_found_result()
 
         # ── Determine confidence from candidate distribution ───────────────
         best = candidates[0]

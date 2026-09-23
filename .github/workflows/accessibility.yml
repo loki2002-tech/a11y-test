@@ -47,27 +47,28 @@ jobs:
           
           # 2. Check for findings
           echo "Looking for findings..."
-          FINDING_ID=$(python -c "
+          python -c "
           import json, glob, sys
           try:
               files = sorted(glob.glob('reports/*_report.json'))
               if not files: sys.exit(0)
               r = json.load(open(files[-1]))
               # Get the first confirmed finding
-              findings = [f['finding_id'] for f in r['findings'] if f.get('status') == 'confirmed']
-              if findings: print(findings[0])
+              findings = [f for f in r['findings'] if f.get('status') == 'confirmed']
+              if findings:
+                  print('Found finding:', findings[0]['finding_id'])
+                  with open('finding.json', 'w') as f:
+                      json.dump(findings[0], f)
           except Exception as e:
-              pass
-          ")
+              print('Error:', e)
+          "
           
           # 3. If a finding exists, trigger the remediation agent
-          if [ ! -z "$FINDING_ID" ]; then
-            echo "Found accessibility violation: $FINDING_ID. Triggering Remediation Agent..."
-            LATEST_JSON=$(ls -t reports/*_report.json | head -1)
+          if [ -f "finding.json" ]; then
+            echo "Found accessibility violation. Triggering Remediation Agent..."
             python -m accessibility_agent.cli remediate \
-              --finding "$FINDING_ID" \
-              --repo . \
-              --json "$LATEST_JSON"
+              --finding finding.json \
+              --repo .
           else
             echo "No accessibility violations found! ✅"
           fi
