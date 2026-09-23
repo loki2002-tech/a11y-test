@@ -58,12 +58,12 @@ jobs:
               files = sorted(glob.glob('reports/*_report.json'))
               if not files: sys.exit(0)
               r = json.load(open(files[-1]))
-              # Get the html-has-lang finding
-              findings = [f for f in r['findings'] if f.get('rule_id') == 'html-has-lang' and f.get('status') == 'confirmed']
-              if findings:
-                  print(f'Found finding: {findings[0][\"finding_id\"]}')
-                  with open('finding_0.json', 'w') as f:
-                      json.dump(findings[0], f)
+              # Get the first 3 confirmed findings that are not color-contrast
+              findings = [f for f in r['findings'] if f.get('status') == 'confirmed' and f.get('rule_id') != 'color-contrast']
+              for i, finding in enumerate(findings[:3]):
+                  print(f'Found finding: {finding[\"finding_id\"]}')
+                  with open(f'finding_{i}.json', 'w') as f:
+                      json.dump(finding, f)
           except Exception as e:
               print('Error:', e)
           "
