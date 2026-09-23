@@ -326,22 +326,42 @@ class SourceLocator:
         )
 
         if not candidates:
-            # Fallback to evidence file_path if available
+            # Fallback to evidence file_path or url if available
             fallback_path = None
             for ev in finding_data.get("evidence", []):
                 fp = ev.get("file_path", "")
                 if fp and not fp.lower().endswith(('.png', '.jpg', '.jpeg')):
                     fallback_path = fp
                     break
+                
+                # If file_path is empty (e.g. live URL scan), try to extract from URL
+                url = ev.get("url", "")
+                if url.startswith("http") and "localhost" in url:
+                    import urllib.parse
+                    parsed = urllib.parse.urlparse(url)
+                    url_path = parsed.path.lstrip("/")
+                    if url_path and not url_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        fallback_path = url_path
+                        break
             
             if fallback_path:
-                candidates.append(_RawMatch(
-                    file_path=self._repo / fallback_path,
-                    line_number=1,
-                    line_content="",
-                    strategy="evidence_fallback",
-                    score=0.5
-                ))
+                if (self._repo / fallback_path).exists():
+                    candidates.append(_RawMatch(
+                        file_path=self._repo / fallback_path,
+                        line_number=1,
+                        line_content="",
+                        strategy="evidence_fallback",
+                        score=0.5
+                    ))
+                else:
+                    # Still try it, might be relative
+                    candidates.append(_RawMatch(
+                        file_path=self._repo / fallback_path,
+                        line_number=1,
+                        line_content="",
+                        strategy="evidence_fallback",
+                        score=0.5
+                    ))
             else:
                 log.warning("source_locator.not_found", finding_id=finding_id)
                 return self._not_found_result()
