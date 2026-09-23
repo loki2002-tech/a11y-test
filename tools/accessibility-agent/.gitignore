@@ -4,8 +4,8 @@
 *.env.production
 
 # Evidence and reports contain PII/screenshots
-evidence/
-reports/
+/evidence/
+/reports/
 
 # axe-core cache
 ~/.cache/accessibility-agent/
