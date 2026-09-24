@@ -388,14 +388,23 @@ class GitManager:
 
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")[:300]
-            log.warning(
-                "git_manager.pr_failed",
-                status=exc.code,
-                error=error_body,
-                branch=branch_name,
-            )
-            result.error = f"PR creation failed: HTTP {exc.code} — {error_body}"
-            # NOT setting error_stage — PR failure doesn't trigger rollback
+            # Ignore "pull request already exists" (422) error
+            if exc.code == 422 and "already exists" in error_body:
+                log.info(
+                    "git_manager.pr_already_exists",
+                    branch=branch_name,
+                )
+                result.pr_created = True
+                result.pr_url = f"https://github.com/{self._owner_repo}/pulls"
+            else:
+                log.warning(
+                    "git_manager.pr_failed",
+                    status=exc.code,
+                    error=error_body,
+                    branch=branch_name,
+                )
+                result.error = f"PR creation failed: HTTP {exc.code} — {error_body}"
+                # NOT setting error_stage — PR failure doesn't trigger rollback
 
         except Exception as exc:
             log.warning(

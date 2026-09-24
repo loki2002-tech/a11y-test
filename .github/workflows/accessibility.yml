@@ -84,7 +84,7 @@ jobs:
               echo "Triggering Remediation Agent for $file..."
               python -m accessibility_agent.cli remediate \
                 --finding "$file" \
-                --repo .
+                --repo . || true
               sleep 3
             fi
           done
