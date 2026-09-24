@@ -107,7 +107,18 @@ jobs:
                   sc   = d.get('wcag', {}).get('success_criterion', '?')
                   fid  = d.get('finding_id', '?')
                   desc = d.get('description', '')[:120]
-                  manual.append((fid, rule, sc, desc))
+                  
+                  # Extract HTML snippet and CSS selector
+                  element = d.get('element', {})
+                  html = element.get('html', 'N/A')
+                  if len(html) > 50: html = html[:47] + '...'
+                  html = html.replace('|', '\|').replace('\n', ' ')
+                  
+                  selector = element.get('selector', 'N/A')
+                  if isinstance(selector, list): selector = selector[0] if selector else 'N/A'
+                  selector = str(selector).replace('|', '\|')
+                  
+                  manual.append((fid, rule, sc, desc, html, selector))
               except Exception:
                   pass
 
@@ -121,11 +132,11 @@ jobs:
               '',
               'The AI agent scanned the page and found the following issues that **cannot be auto-fixed** and need a human developer to resolve.',
               '',
-              '| # | Finding ID | Rule | WCAG SC | Description |',
-              '|---|-----------|------|---------|-------------|',
+              '| # | Finding ID | Rule | WCAG SC | CSS Selector | HTML Snippet | Description |',
+              '|---|-----------|------|---------|-------------|--------------|-------------|',
           ]
-          for i, (fid, rule, sc, desc) in enumerate(manual, 1):
-              lines.append(f'| {i} | \`{fid}\` | \`{rule}\` | {sc} | {desc} |')
+          for i, (fid, rule, sc, desc, html, selector) in enumerate(manual, 1):
+              lines.append(f'| {i} | \`{fid}\` | \`{rule}\` | {sc} | \`{selector}\` | \`{html}\` | {desc} |')
 
           lines += [
               '',
