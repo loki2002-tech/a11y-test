@@ -44,34 +44,56 @@ jobs:
           git config --global user.name "accessibility-agent[bot]"
           git config --global user.email "accessibility-agent[bot]@users.noreply.github.com"
           
-          # 1. Run the scan
-          python -m accessibility_agent.cli scan \
-            --url http://localhost:8080/index.html \
-            --mode automated \
-            --agentic \
-            --output ./reports
+          # 1. Run the scan across ALL pages
+          PAGES=(
+            "http://localhost:8080/index.html"
+            "http://localhost:8080/a11y-test-page-2-dashboard.html"
+            "http://localhost:8080/a11y-test-page-3-news.html"
+            "http://localhost:8080/a11y-test-page-4-checkout.html"
+            "http://localhost:8080/a11y-test-page-5-app.html"
+            "http://localhost:8080/a11y-test-page-6-hotel.html"
+          )
           
-          # 2. Check for findings
-          echo "Looking for findings..."
+          mkdir -p reports
+          
+          for PAGE_URL in "${PAGES[@]}"; do
+            echo "==> Scanning: $PAGE_URL"
+            python -m accessibility_agent.cli scan \
+              --url "$PAGE_URL" \
+              --mode automated \
+              --agentic \
+              --output ./reports || true
+            sleep 2
+          done
+
+          # 2. Extract and deduplicate all findings from all report files
+          echo "Looking for findings across all pages..."
           python -c "
           import json, glob, sys
           try:
               files = sorted(glob.glob('reports/*_report.json'))
               if not files: sys.exit(0)
-              r = json.load(open(files[-1]))
-              # Get all confirmed findings that are not color-contrast
-              findings = [f for f in r['findings'] if f.get('status') == 'confirmed' and f.get('rule_id') != 'color-contrast']
-              # Deduplicate by finding_id — keep only the first occurrence
+              
               seen = set()
               unique = []
-              for f in findings:
-                  fid = f.get('finding_id')
-                  if fid and fid not in seen:
-                      seen.add(fid)
-                      unique.append(f)
-              print(f'Total unique findings to remediate: {len(unique)}')
+              
+              for report_file in files:
+                  try:
+                      r = json.load(open(report_file))
+                      findings = [f for f in r.get('findings', [])
+                                  if f.get('status') == 'confirmed'
+                                  and f.get('rule_id') != 'color-contrast']
+                      for f in findings:
+                          fid = f.get('finding_id')
+                          if fid and fid not in seen:
+                              seen.add(fid)
+                              unique.append(f)
+                  except Exception as e:
+                      print(f'Error reading {report_file}: {e}')
+              
+              print(f'Total unique findings across all pages: {len(unique)}')
               for i, finding in enumerate(unique):
-                  print(f'Found finding: {finding[\"finding_id\"]}')
+                  print(f'Finding {i}: {finding[\"finding_id\"]} | page: {finding.get(\"url\",\"\")}')
                   with open(f'finding_{i}.json', 'w') as out:
                       json.dump(finding, out)
           except Exception as e:
@@ -85,7 +107,7 @@ jobs:
               python -m accessibility_agent.cli remediate \
                 --finding "$file" \
                 --repo . || true
-              sleep 3
+              sleep 5
             fi
           done
 

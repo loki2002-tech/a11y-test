@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout</title>
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; margin:0; padding:20px; }
+  .steps { display:flex; justify-content:space-between; margin-bottom:30px; }
+  .step { text-align:center; flex:1; color:#bbb; }
+  .step.done { color:#4caf50; }
+  .step.current { color:#111; font-weight:bold; }
+  fieldset { border:1px solid #ddd; margin-bottom:20px; padding:15px; }
+  .field-row { margin-bottom:12px; }
+  .field-row input { display:block; margin-top:4px; padding:6px; width:250px; }
+  .error-text { color:#e53935; font-size:12px; display:none; }
+  .price-summary { background:#fafafa; padding:15px; width:300px; }
+  .radio-card { border:1px solid #ccc; padding:10px; margin-bottom:8px; cursor:pointer; }
+  .radio-card.selected { border-color:#111; }
+  .accordion-header { background:#eee; padding:10px; cursor:pointer; }
+  .accordion-body { padding:10px; display:none; }
+  .cc-input::placeholder { color:#ccc; }
+  .promo-applied { color:#4caf50; font-size:12px; }
+</style>
+</head>
+<body>
+
+<!-- MANUAL (WCAG 2.4.8 Location / 1.3.1): step indicator conveys progress via color/bold only, no aria-current, no text like "step 2 of 3" -->
+<div class="steps">
+  <div class="step done">Cart</div>
+  <div class="step current">Shipping</div>
+  <div class="step">Payment</div>
+</div>
+
+<!-- AXE: page-has-heading-one -->
+<h2>Shipping Information</h2>
+
+<form novalidate onsubmit="return validateForm()">
+
+  <fieldset>
+    <!-- AXE: aria-required-attr / MANUAL (WCAG 3.3.2): required fields marked with a red asterisk only, no text alternative, no aria-required -->
+    <legend>Contact</legend>
+    <div class="field-row">
+      <label for="email">Email <span style="color:red;">*</span></label>
+      <input type="text" id="email">
+      <span class="error-text" id="email-err">Please enter a valid email</span>
+      <!-- AXE: aria-describedby not linked, so error text is never announced -->
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Shipping Address</legend>
+
+    <!-- AXE: label — placeholder-only fields, no <label> element at all -->
+    <div class="field-row">
+      <input type="text" placeholder="First name *">
+    </div>
+    <div class="field-row">
+      <input type="text" placeholder="Last name *">
+    </div>
+    <div class="field-row">
+      <input type="text" placeholder="Street address *">
+    </div>
+
+    <!-- AXE: autocomplete-valid — wrong/misspelled autocomplete tokens -->
+    <div class="field-row">
+      <label for="city">City</label>
+      <input type="text" id="city" autocomplete="adress-level2">
+    </div>
+
+    <!-- MANUAL (WCAG 1.3.5 Identify Input Purpose): zip/postal field has no autocomplete attribute at all -->
+    <div class="field-row">
+      <label for="zip">ZIP Code</label>
+      <input type="text" id="zip">
+    </div>
+
+    <!-- AXE: radio group missing fieldset/legend / accessible group name -->
+    <div>
+      <div><input type="radio" name="shiptype" id="std"> <label for="std">Standard (5-7 days)</label></div>
+      <div><input type="radio" name="shiptype" id="exp"> <label for="exp">Express (2 days)</label></div>
+    </div>
+  </fieldset>
+
+  <!-- MANUAL (WCAG 2.1.1 Keyboard, 4.1.2): radio-card style selector built with div+onclick, not real radio inputs, no keyboard support, no role/state -->
+  <fieldset>
+    <legend>Delivery Instructions</legend>
+    <div class="radio-card selected" onclick="selectCard(this)">Leave at front door</div>
+    <div class="radio-card" onclick="selectCard(this)">Hand to recipient</div>
+    <div class="radio-card" onclick="selectCard(this)">Leave with neighbor</div>
+  </fieldset>
+
+  <!-- AXE: aria-expanded misuse — accordion header has aria-expanded but is a div with no role/tabindex/keyboard handler -->
+  <div class="accordion-header" aria-expanded="false" onclick="toggleAcc(this)">Have a promo code?</div>
+  <div class="accordion-body">
+    <input type="text" class="cc-input" placeholder="Promo code (this is the ONLY label)">
+    <button type="button">Apply</button>
+    <div class="promo-applied" role="status" aria-live="off">Code applied: SAVE10</div>
+    <!-- MANUAL: aria-live="off" explicitly suppresses the one status message that should be announced -->
+  </div>
+
+  <div class="price-summary">
+    <p>Subtotal: $180.00</p>
+    <p>Shipping: $5.00</p>
+    <!-- MANUAL (WCAG 1.4.1): total highlighted only by larger red text with no other distinguishing marker -->
+    <p style="color:red; font-size:20px;">Total: $185.00</p>
+  </div>
+
+  <!-- AXE: aria-hidden-focus — decorative svg icon marked aria-hidden correctly, but the *button* wrapping it has no text, only relies on icon -->
+  <button type="submit" style="padding:12px 30px;">
+    <svg aria-hidden="true" width="16" height="16"><circle cx="8" cy="8" r="6"/></svg>
+  </button>
+
+</form>
+
+<script>
+  function selectCard(el){
+    document.querySelectorAll('.radio-card').forEach(function(c){c.classList.remove('selected');});
+    el.classList.add('selected');
+  }
+  function toggleAcc(el){
+    var body = el.nextElementSibling;
+    var open = body.style.display === 'block';
+    body.style.display = open ? 'none' : 'block';
+    el.setAttribute('aria-expanded', !open);
+  }
+  function validateForm(){
+    // MANUAL (WCAG 3.3.1 Error Identification): on failure, only shows red text via display:block,
+    // never moves focus to the error, never announces it, and doesn't associate it with the field.
+    document.getElementById('email-err').style.display = 'block';
+    return false;
+  }
+</script>
+
+</body>
+</html>

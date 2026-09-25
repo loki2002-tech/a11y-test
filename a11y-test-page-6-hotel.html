@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sunset Bay Resort — Book Your Stay</title>
+<style>
+  body { font-family: 'Playfair Display', Georgia, serif; margin:0; }
+  .hero-banner { height:400px; background:#333 url(resort.jpg) center/cover; position:relative; }
+  .hero-text { position:absolute; bottom:40px; left:40px; color:#fff; }
+  .search-bar { display:flex; gap:10px; background:#fff; padding:15px; margin:-40px 40px 0; box-shadow:0 2px 8px rgba(0,0,0,.15); position:relative; }
+  .gallery { display:flex; gap:5px; padding:20px; }
+  .gallery img { width:150px; height:100px; object-fit:cover; cursor:pointer; }
+  .review-stars { color:#f5a623; }
+  .amenity-icon { width:24px; height:24px; display:inline-block; margin-right:5px; }
+  .date-picker-popup { display:none; position:absolute; background:#fff; border:1px solid #ccc; padding:10px; z-index:10; }
+  .day-cell { display:inline-block; width:30px; height:30px; text-align:center; line-height:30px; cursor:pointer; }
+  .day-cell.unavailable { color:#ddd; text-decoration:line-through; }
+  .day-cell.selected { background:#333; color:#fff; }
+  .cta-book { background:#c9a86a; color:#fff; padding:14px 30px; border:none; font-size:16px; }
+  .lightbox { position:fixed; inset:0; background:rgba(0,0,0,.9); display:none; }
+  .breadcrumb a { color:#999; font-size:12px; text-decoration:none; }
+</style>
+</head>
+<body>
+
+<!-- AXE: image-alt — CSS background image used to convey meaningful hero content, no text alternative anywhere -->
+<div class="hero-banner">
+  <div class="hero-text">
+    <!-- AXE: page-has-heading-one satisfied here, but... -->
+    <h1>Sunset Bay Resort</h1>
+    <!-- MANUAL (WCAG 1.4.3): white text over a busy photo background with no scrim/overlay guarantee — fails contrast on lighter parts of the photo, not testable by axe on a static color -->
+    <p>Where the ocean meets luxury</p>
+  </div>
+</div>
+
+<!-- MANUAL (WCAG 2.4.8): breadcrumb present but not marked up as a landmark/nav with aria-label, and current page not indicated with aria-current -->
+<div class="breadcrumb" style="padding:10px 40px;">
+  <a href="#">Home</a> &gt; <a href="#">Resorts</a> &gt; <a href="#">Sunset Bay</a>
+</div>
+
+<div class="search-bar">
+  <!-- AXE: label -->
+  <input type="text" placeholder="Check-in">
+
+  <!-- MANUAL (WCAG 2.1.2 No Keyboard Trap): custom date picker popup, once opened via mouse, cannot be closed or navigated with keyboard; Tab cycles infinitely inside it via JS -->
+  <div style="position:relative;">
+    <input type="text" placeholder="Check-out" onclick="document.getElementById('dp').style.display='block'">
+    <div class="date-picker-popup" id="dp">
+      <div class="day-cell">1</div><div class="day-cell">2</div><div class="day-cell unavailable">3</div>
+      <div class="day-cell selected">4</div><div class="day-cell">5</div><div class="day-cell">6</div>
+      <!-- AXE: color-contrast + MANUAL: unavailable/selected state conveyed only by color/strikethrough, no text/aria-disabled/aria-selected -->
+    </div>
+  </div>
+
+  <select>
+    <option>2 Guests</option>
+  </select>
+  <!-- AXE: select-name -->
+
+  <button class="cta-book">Search</button>
+</div>
+
+<!-- AXE: heading-order — no h2, jumps to h3 -->
+<h3 style="padding:0 40px;">Photo Gallery</h3>
+<div class="gallery">
+  <!-- AXE: image-alt — all five gallery images share the exact same generic alt text -->
+  <img src="room1.jpg" alt="Resort photo" onclick="document.getElementById('lb').style.display='block'">
+  <img src="room2.jpg" alt="Resort photo">
+  <img src="pool.jpg" alt="Resort photo">
+  <img src="restaurant.jpg" alt="Resort photo">
+  <img src="beach.jpg" alt="Resort photo">
+</div>
+
+<!-- MANUAL (WCAG 2.1.1 / 2.4.3): lightbox opens on image click only, no keyboard trigger, no focus moved in, no close button reachable by keyboard, no Escape handler -->
+<div class="lightbox" id="lb">
+  <img src="room1.jpg" style="max-width:90%;margin:40px auto;display:block;">
+</div>
+
+<h3 style="padding:0 40px;">Guest Reviews</h3>
+<div style="padding:0 40px;">
+  <!-- AXE: MANUAL (WCAG 1.1.1): star rating rendered as unicode stars only, no numeric/text equivalent ("4.5 out of 5") for screen readers -->
+  <p class="review-stars">&#9733;&#9733;&#9733;&#9733;&#9734;</p>
+  <p>"Beautiful views and excellent service. Would come back."</p>
+  <p class="review-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</p>
+  <p>"Best vacation we've had in years."</p>
+</div>
+
+<h3 style="padding:0 40px;">Amenities</h3>
+<div style="padding:0 40px;">
+  <!-- AXE: image-alt — informative icons with empty alt, meaning lost entirely (icon + no text label at all) -->
+  <img src="icon-wifi.svg" class="amenity-icon" alt="">
+  <img src="icon-pool.svg" class="amenity-icon" alt="">
+  <img src="icon-spa.svg" class="amenity-icon" alt="">
+  <img src="icon-parking.svg" class="amenity-icon" alt="">
+  <!-- no text labels accompany any of the icons -->
+</div>
+
+<!-- AXE: object-alt / embed missing title — PDF brochure embedded with no fallback/title -->
+<h3 style="padding:0 40px;">Resort Map</h3>
+<div style="padding:0 40px;">
+  <embed src="resort-map.pdf" width="400" height="300">
+</div>
+
+<!-- MANUAL (WCAG 1.4.12 Text Spacing): fixed line-height and letter-spacing in px that breaks/clips text when user overrides text spacing via browser/extension -->
+<div style="padding:20px 40px; line-height:1; letter-spacing:-0.5px; max-height:60px; overflow:hidden;">
+  <p>Cancellation policy: full refund available up to 48 hours before check-in. After that, one night's stay will be charged as a cancellation fee, non-refundable for all booking types including promotional rates.</p>
+</div>
+
+<!-- AXE: aria-roledescription misuse + link-name -->
+<div role="button" aria-roledescription="favorite toggle" onclick="this.classList.toggle('fav')">
+  <svg width="20" height="20"><path d="M0 0h20v20H0z" fill="#ccc"/></svg>
+</div>
+
+<footer style="background:#222; color:#555; padding:30px 40px; margin-top:20px;">
+  <!-- AXE: color-contrast on entire footer text block -->
+  <p style="color:#444;">Sunset Bay Resort, 1 Ocean Drive. All rights reserved.</p>
+  <!-- MANUAL (WCAG 3.3.2): newsletter input has no label, and submitting triggers a phone-number-only CAPTCHA with no alternative (audio/text) -->
+  <input type="email" placeholder="Subscribe for deals" style="padding:6px;">
+  <button style="padding:6px 12px;">Go</button>
+</footer>
+
+</body>
+</html>

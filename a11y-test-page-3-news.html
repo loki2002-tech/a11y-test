@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Herald - Breaking News, Sports, Weather, Local Stories, Opinion, Business and More From Around The World</title>
+<!-- MANUAL (WCAG 2.4.2): title exists but absurdly long/keyword-stuffed, not concise -->
+<style>
+  body { font-family: Georgia, serif; margin:0; color:#111; }
+  header { border-bottom:3px solid #111; padding:15px 20px; }
+  .masthead { font-size:32px; font-weight:bold; letter-spacing:1px; }
+  nav.topnav a { margin-right:12px; font-size:12px; text-transform:uppercase; color:#900; text-decoration:none; }
+  .article { max-width:700px; margin:20px auto; padding:0 20px; }
+  .byline { color:#777; font-size:13px; }
+  .pullquote { font-style:italic; font-size:20px; color:#c00; border-left:3px solid #c00; padding-left:15px; }
+  .related { background:#f8f8f8; padding:15px; margin:20px 0; }
+  .comment { border-top:1px solid #eee; padding:10px 0; }
+  .paywall-blur { filter: blur(3px); user-select:none; }
+  .ad-banner { background:#ddd; height:90px; text-align:center; line-height:90px; margin:10px 0; }
+  a.footnote-ref { vertical-align:super; font-size:10px; }
+  .caption { font-size:11px; color:#888; }
+</style>
+</head>
+<body>
+
+<header>
+  <!-- AXE: page-has-heading-one — masthead is styled like a title but is a div, and real h1 never appears -->
+  <div class="masthead">Daily Herald</div>
+  <nav class="topnav">
+    <a href="#">World</a><a href="#">Politics</a><a href="#">Business</a><a href="#">Opinion</a><a href="#">Sports</a>
+  </nav>
+</header>
+
+<div class="ad-banner">Advertisement</div>
+
+<div class="article">
+  <!-- AXE: heading-order — jumps straight to h4 for the article title -->
+  <h4>City Council Approves New Transit Budget Amid Public Debate</h4>
+  <p class="byline">By Staff Reporter | Published 2 hours ago | Updated 10 minutes ago</p>
+
+  <!-- MANUAL (WCAG 1.4.8 / readability, and 1.3.2 Meaningful Sequence): multi-column CSS layout reorders reading order visually vs DOM -->
+  <div style="column-count:3; column-gap:20px;">
+    <p>The city council voted 6-3 Tuesday night to approve a $12 million increase to the regional transit budget, following months of public hearings and contentious debate over funding priorities.</p>
+    <p>Supporters of the measure argued that aging infrastructure required immediate investment, while opponents raised concerns about the impact on the general fund.</p>
+    <p>The new budget takes effect at the start of the next fiscal quarter and includes provisions for expanded bus routes in underserved neighborhoods.</p>
+  </div>
+
+  <blockquote class="pullquote">"This is the most significant investment in public transit in a generation," said one council member.</blockquote>
+
+  <!-- AXE: image-alt — purely decorative treatment of a meaningful photo -->
+  <img src="council-meeting.jpg" alt="image">
+  <p class="caption">Photo caption</p>
+  <!-- MANUAL: alt text ("image") and caption ("Photo caption") are both non-descriptive placeholders -->
+
+  <!-- MANUAL (WCAG 1.4.5 Images of Text): key stat rendered as an image instead of real text, no alternative -->
+  <img src="stat-graphic-12-million.png" alt="">
+
+  <p>Officials say the plan balances near-term needs with long-term sustainability<a href="#fn1" class="footnote-ref">1</a>, though critics remain skeptical.</p>
+
+  <!-- AXE: link-name — footnote target link has no accessible distinguishing text -->
+  <p id="fn1"><a href="#">^</a> Based on the FY27 capital improvement report.</p>
+
+  <div class="related">
+    <!-- AXE: heading-order -->
+    <h6>Related Stories</h6>
+    <ul style="list-style:none;padding:0;">
+      <li><a href="#">Mayor responds to budget criticism</a></li>
+      <li><a href="#">Previous transit expansion falls short of targets</a></li>
+    </ul>
+  </div>
+
+  <!-- MANUAL (WCAG 1.4.10 Reflow): paywall blur effect makes text unreadable/zoomable content inaccessible, with no accessible alternative or text description -->
+  <div class="paywall-blur">
+    <p>Subscribers get full access to in-depth reporting, including exclusive interviews with council members and budget analysts who reviewed the proposal before the vote.</p>
+  </div>
+  <!-- AXE: button-name -->
+  <button style="width:100%;padding:12px;background:#900;color:#fff;border:none;"></button>
+
+  <!-- AXE: list — fake list using divs with bullet characters instead of <ul>/<li> -->
+  <div style="margin:20px 0;">
+    <div>&bull; Council meets again next Tuesday</div>
+    <div>&bull; Public comment period reopens Friday</div>
+    <div>&bull; Final vote expected in Q3</div>
+  </div>
+
+  <!-- MANUAL (WCAG 2.4.4 Link Purpose): five identical "Read more" links with no distinguishing context for screen reader users navigating by link list -->
+  <h6>More From This Section</h6>
+  <p>Budget shortfalls loom for neighboring districts. <a href="#">Read more</a></p>
+  <p>Transit union responds to new hiring plan. <a href="#">Read more</a></p>
+  <p>Council member under fire for conflict of interest. <a href="#">Read more</a></p>
+
+  <!-- AXE: aria-input-field-name -->
+  <div>
+    <div contenteditable="true" role="textbox" style="border:1px solid #ccc;min-height:60px;padding:8px;"></div>
+    <button>Post Comment</button>
+  </div>
+
+  <!-- MANUAL (WCAG 1.3.1): comments rendered with no semantic structure (no article/heading per comment), all visually identical to body text making them indistinguishable to AT -->
+  <div class="comment">Great reporting on this, thanks for the detail.</div>
+  <div class="comment">I disagree with the council's priorities here.</div>
+
+  <!-- AXE: meta-viewport-large / MANUAL: text-resize test — font-size fixed in px with no rem/em, breaks at 200% browser zoom for this block -->
+  <p style="font-size:10px; line-height:10px;">Corrections: An earlier version of this story misstated the budget figure. It has been corrected.</p>
+
+</div>
+
+<!-- AXE: landmark-unique — two <nav> elements both with no distinguishing accessible name -->
+<nav>
+  <a href="#">Terms</a> <a href="#">Privacy</a>
+</nav>
+<nav>
+  <a href="#">Advertise</a> <a href="#">Careers</a>
+</nav>
+
+</body>
+</html>

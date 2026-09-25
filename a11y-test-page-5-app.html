@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskFlow App</title>
+<style>
+  body { font-family: 'Trebuchet MS', sans-serif; margin:0; background:#fff; }
+  .topbar { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; background:#5b21b6; color:#fff; }
+  .board { display:flex; gap:15px; padding:20px; overflow-x:auto; }
+  .column { min-width:260px; background:#f4f4f8; padding:10px; border-radius:6px; }
+  .task-card { background:#fff; border:1px solid #e0e0e0; padding:10px; margin-bottom:8px; border-radius:4px; cursor:grab; }
+  .priority-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:5px; }
+  .p-high { background:red; }
+  .p-med { background:orange; }
+  .p-low { background:green; }
+  .overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); display:none; }
+  .dialog { background:#fff; width:400px; margin:80px auto; padding:20px; }
+  .avatar { width:28px; height:28px; border-radius:50%; background:#ccc; display:inline-block; }
+  .notif-dot { width:8px; height:8px; background:red; border-radius:50%; position:absolute; margin-left:-10px; }
+  .drag-handle { cursor:move; color:#ccc; }
+  .btn-icon-only { background:none; border:none; padding:4px; }
+  .stepper button { width:24px; height:24px; }
+  .collapsible-panel { display:none; }
+  .spinner { border:3px solid #eee; border-top:3px solid #5b21b6; border-radius:50%; width:20px; height:20px; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span style="font-weight:bold;">TaskFlow</span>
+  <!-- AXE: button-name — icon-only buttons, notification dot conveys unread count via color/position only -->
+  <div>
+    <button class="btn-icon-only" style="color:#fff;">&#128269;</button>
+    <span style="position:relative;">
+      <button class="btn-icon-only" style="color:#fff;">&#128276;</button>
+      <span class="notif-dot"></span>
+    </span>
+    <span class="avatar"></span>
+  </div>
+</div>
+
+<!-- AXE: page-has-heading-one -->
+<div style="padding:10px 20px;">
+  <h3 style="display:inline;">Sprint Board</h3>
+  <!-- MANUAL (WCAG 4.1.3): live collaborator count updates via websocket-style JS with no aria-live -->
+  <span id="liveCount" style="float:right;color:#777;font-size:13px;">3 people viewing</span>
+</div>
+
+<!-- MANUAL (WCAG 2.1.1 / 1.3.1): drag-and-drop kanban board with NO keyboard-operable alternative (no move-up/move-down buttons, no keyboard handlers at all) -->
+<div class="board">
+  <div class="column">
+    <!-- AXE: heading-order -->
+    <h6>To Do (4)</h6>
+    <div class="task-card" draggable="true">
+      <span class="priority-dot p-high"></span>Fix login redirect bug
+      <div class="drag-handle" draggable="true">::</div>
+      <!-- MANUAL: priority conveyed by color dot only, "::" drag handle has no accessible name/role -->
+    </div>
+    <div class="task-card" draggable="true">
+      <span class="priority-dot p-med"></span>Update onboarding copy
+    </div>
+  </div>
+  <div class="column">
+    <h6>In Progress (2)</h6>
+    <div class="task-card" draggable="true">
+      <span class="priority-dot p-low"></span>Refactor billing service
+    </div>
+  </div>
+  <div class="column">
+    <h6>Done (12)</h6>
+    <div class="task-card" draggable="true" style="opacity:.6;">
+      <span class="priority-dot p-med"></span>Design new empty states
+    </div>
+  </div>
+</div>
+
+<!-- AXE: aria-dialog-name — dialog role with no accessible name -->
+<div class="overlay" id="taskOverlay">
+  <div class="dialog" role="dialog" aria-modal="true">
+    <!-- MANUAL (WCAG 2.4.3): focus is never sent into the dialog on open, and never returned to trigger on close -->
+    <div class="task-card" style="cursor:default;">
+      <input type="text" value="Fix login redirect bug" style="width:100%;font-size:16px;border:none;">
+    </div>
+
+    <!-- AXE: aria-command-name — custom stepper with plus/minus symbols only, no labels -->
+    <div class="stepper">
+      <span>Story points:</span>
+      <button>-</button>
+      <span>3</span>
+      <button>+</button>
+    </div>
+
+    <!-- MANUAL (WCAG 1.4.13): assignee picker shows a custom hover-preview card with user details, not reachable/dismissible via keyboard or Esc -->
+    <div onmouseover="document.getElementById('userPreview').style.display='block'">
+      Assigned to: <span class="avatar" style="width:16px;height:16px;"></span> J.Lee
+    </div>
+    <div id="userPreview" style="display:none;position:absolute;background:#fff;border:1px solid #ccc;padding:10px;">
+      Jordan Lee — Senior Engineer — jordan@company.com
+    </div>
+
+    <!-- AXE: select-name -->
+    <select>
+      <option>Backlog</option>
+      <option selected>To Do</option>
+      <option>In Progress</option>
+    </select>
+
+    <!-- MANUAL (WCAG 3.2.2): closing dialog by clicking overlay background happens with no confirmation even with unsaved text edits, and Escape key is not wired up -->
+    <button onclick="document.getElementById('taskOverlay').style.display='none'" style="float:right;">Close</button>
+  </div>
+</div>
+<button onclick="document.getElementById('taskOverlay').style.display='flex'">Open a task (demo)</button>
+
+<!-- AXE: aria-progressbar-name -->
+<div style="padding:0 20px;">
+  <h6>Sprint Progress</h6>
+  <div role="progressbar" aria-valuenow="65"></div>
+  <div style="height:8px;background:#eee;width:300px;">
+    <div style="height:8px;background:#5b21b6;width:65%;"></div>
+  </div>
+</div>
+
+<!-- MANUAL (WCAG 1.4.3 Contrast / 4.1.2): loading spinner with no accessible name/text and insufficient contrast border -->
+<div style="padding:0 20px;">
+  <div class="spinner"></div> Loading more tasks...
+</div>
+
+<!-- AXE: tabindex — positive tabindex values create unpredictable/broken tab order -->
+<div style="padding:0 20px;">
+  <h6>Quick Filters</h6>
+  <button tabindex="3">My tasks</button>
+  <button tabindex="1">High priority</button>
+  <button tabindex="2">Due this week</button>
+</div>
+
+<!-- AXE: collapsible panel toggled with no aria-expanded/aria-controls relationship at all -->
+<div class="accordion-header-v2" onclick="var p=document.getElementById('panel1'); p.style.display = p.style.display==='block'?'none':'block';" style="cursor:pointer;padding:10px 20px;background:#f0f0f0;">
+  Archived tasks (24)
+</div>
+<div id="panel1" class="collapsible-panel" style="padding:0 20px;">
+  <p>24 archived tasks are hidden here.</p>
+</div>
+
+<script>
+  setInterval(function(){
+    var n = Math.floor(Math.random()*5)+1;
+    document.getElementById('liveCount').innerText = n + ' people viewing';
+  }, 4000);
+</script>
+
+</body>
+</html>
