@@ -398,8 +398,9 @@ class ModalFocusTrapTester:
         Returns: {escaped: bool, escaped_to: str, tab_count: int}
         """
         try:
+            dialog_selector_safe = dialog_selector.replace("'", "\\'")
             result = await self._browser.evaluate(f"""async () => {{
-                const dialog = document.querySelector('{dialog_selector.replace("'", "\\'")}');
+                const dialog = document.querySelector('{dialog_selector_safe}');
                 if (!dialog) return {{ escaped: false, error: 'dialog not found' }};
 
                 // Find the first focusable element inside the dialog and focus it
@@ -452,8 +453,9 @@ class ModalFocusTrapTester:
             import asyncio
             await asyncio.sleep(0.3)
 
+            dialog_selector_safe = dialog_selector.replace("'", "\\'")
             closed = await self._browser.evaluate(f"""() => {{
-                const dialog = document.querySelector('{dialog_selector.replace("'", "\\'")}');
+                const dialog = document.querySelector('{dialog_selector_safe}');
                 if (!dialog) return true;  // Gone from DOM = closed
                 const style = window.getComputedStyle(dialog);
                 if (style.display === 'none' || style.visibility === 'hidden') return true;
