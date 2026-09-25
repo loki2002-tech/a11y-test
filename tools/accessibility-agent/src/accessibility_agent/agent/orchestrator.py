@@ -241,6 +241,137 @@ class ScanOrchestrator:
                 except Exception as exc:
                     log.error("orchestrator.keyboard_failed", error=str(exc))
 
+                # zoom reflow tester
+                try:
+                    from accessibility_agent.accessibility.zoom_tester import ZoomReflowTester
+                    zoom_tester = ZoomReflowTester(browser)
+                    zoom_findings = await zoom_tester.run(url=self.url, page_title=page_title)
+                    for finding in zoom_findings:
+                        # Need to convert raw dicts to Finding objects for result
+                        # The other testers return Finding objects, but the new ones return dicts.
+                        # Wait, let's look at how kb_findings is added. kb_findings returns a list of Findings!
+                        # The new testers return dicts. Let me map them to Finding objects.
+                        from accessibility_agent.schemas import Finding, ElementNode, WCAGInfo, WCAGLevel, WCAGPrinciple, FindingStatus
+                        import uuid
+
+                        # Actually, wait, let's map them properly
+                        if isinstance(finding, dict):
+                            wcag_data = finding.get("wcag", {})
+                            wcag_obj = WCAGInfo(
+                                success_criterion=wcag_data.get("success_criterion", ""),
+                                level=WCAGLevel(wcag_data.get("level", "A")),
+                                title=wcag_data.get("title", ""),
+                                principle=WCAGPrinciple(wcag_data.get("principle", "perceivable")),
+                                url=wcag_data.get("url", ""),
+                            )
+                            elem_data = finding.get("element", {})
+                            elem_obj = ElementNode(
+                                html=elem_data.get("html", ""),
+                                selector=elem_data.get("selector", "")
+                            )
+                            
+                            f_obj = Finding(
+                                rule_id=finding.get("rule_id", ""),
+                                description=finding.get("description", ""),
+                                impact=finding.get("impact", "serious"),
+                                wcag=wcag_obj,
+                                element=elem_obj,
+                                url=finding.get("url", self.url),
+                                page_title=finding.get("page_title", page_title),
+                                source=finding.get("source", "tester"),
+                                status=FindingStatus.CONFIRMED,
+                                evidence=[finding.get("evidence", {})],
+                            )
+                            f_obj.finding_id = f"A11Y-{uuid.uuid4().hex[:8].upper()}"
+                            finding = f_obj
+
+                        finding.evidence.append(current_screenshot)
+                        result.add_finding(finding)
+                except Exception as exc:
+                    log.error("orchestrator.zoom_failed", error=str(exc))
+
+                # motion tester
+                try:
+                    from accessibility_agent.accessibility.motion_tester import MotionTester
+                    motion_tester = MotionTester(browser)
+                    motion_findings = await motion_tester.run(url=self.url, page_title=page_title)
+                    for finding in motion_findings:
+                        if isinstance(finding, dict):
+                            from accessibility_agent.schemas import Finding, ElementNode, WCAGInfo, WCAGLevel, WCAGPrinciple, FindingStatus
+                            import uuid
+                            wcag_data = finding.get("wcag", {})
+                            wcag_obj = WCAGInfo(
+                                success_criterion=wcag_data.get("success_criterion", ""),
+                                level=WCAGLevel(wcag_data.get("level", "A")),
+                                title=wcag_data.get("title", ""),
+                                principle=WCAGPrinciple(wcag_data.get("principle", "perceivable")),
+                                url=wcag_data.get("url", ""),
+                            )
+                            elem_data = finding.get("element", {})
+                            elem_obj = ElementNode(
+                                html=elem_data.get("html", ""),
+                                selector=elem_data.get("selector", "")
+                            )
+                            f_obj = Finding(
+                                rule_id=finding.get("rule_id", ""),
+                                description=finding.get("description", ""),
+                                impact=finding.get("impact", "serious"),
+                                wcag=wcag_obj,
+                                element=elem_obj,
+                                url=finding.get("url", self.url),
+                                page_title=finding.get("page_title", page_title),
+                                source=finding.get("source", "tester"),
+                                status=FindingStatus.CONFIRMED,
+                                evidence=[finding.get("evidence", {})],
+                            )
+                            f_obj.finding_id = f"A11Y-{uuid.uuid4().hex[:8].upper()}"
+                            finding = f_obj
+                        finding.evidence.append(current_screenshot)
+                        result.add_finding(finding)
+                except Exception as exc:
+                    log.error("orchestrator.motion_failed", error=str(exc))
+
+                # screen reader tester
+                try:
+                    from accessibility_agent.accessibility.screen_reader_tester import ScreenReaderTester
+                    sr_tester = ScreenReaderTester(browser)
+                    sr_findings = await sr_tester.run(url=self.url, page_title=page_title)
+                    for finding in sr_findings:
+                        if isinstance(finding, dict):
+                            from accessibility_agent.schemas import Finding, ElementNode, WCAGInfo, WCAGLevel, WCAGPrinciple, FindingStatus
+                            import uuid
+                            wcag_data = finding.get("wcag", {})
+                            wcag_obj = WCAGInfo(
+                                success_criterion=wcag_data.get("success_criterion", ""),
+                                level=WCAGLevel(wcag_data.get("level", "A")),
+                                title=wcag_data.get("title", ""),
+                                principle=WCAGPrinciple(wcag_data.get("principle", "perceivable")),
+                                url=wcag_data.get("url", ""),
+                            )
+                            elem_data = finding.get("element", {})
+                            elem_obj = ElementNode(
+                                html=elem_data.get("html", ""),
+                                selector=elem_data.get("selector", "")
+                            )
+                            f_obj = Finding(
+                                rule_id=finding.get("rule_id", ""),
+                                description=finding.get("description", ""),
+                                impact=finding.get("impact", "serious"),
+                                wcag=wcag_obj,
+                                element=elem_obj,
+                                url=finding.get("url", self.url),
+                                page_title=finding.get("page_title", page_title),
+                                source=finding.get("source", "tester"),
+                                status=FindingStatus.CONFIRMED,
+                                evidence=[finding.get("evidence", {})],
+                            )
+                            f_obj.finding_id = f"A11Y-{uuid.uuid4().hex[:8].upper()}"
+                            finding = f_obj
+                        finding.evidence.append(current_screenshot)
+                        result.add_finding(finding)
+                except Exception as exc:
+                    log.error("orchestrator.sr_failed", error=str(exc))
+
             # ── Step 3 & 4: Initial Scans ──────────────────────────────────
             step += 1
             log.info("orchestrator.step", step=step, action="run_initial_scans")
