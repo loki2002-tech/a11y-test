@@ -388,9 +388,33 @@ class RemediationPlanner:
 
             # ── PHASE 3: Critic Review ────────────────────────────────────────
             # A second LLM call reviews the proposed fix before it touches code.
+            
+            # Synthesize a rough proposed HTML for the critic to evaluate
+            proposed_html = element_html
+            if target_attr and target_attr.lower() == "outerhtml":
+                proposed_html = target_val
+            elif target_attr and target_attr.lower() == "innerhtml":
+                # Very rough approximation
+                tag_match = re.match(r"(<[^>]+>)", element_html)
+                start_tag = tag_match.group(1) if tag_match else ""
+                end_tag_match = re.search(r"(</[^>]+>)$", element_html)
+                end_tag = end_tag_match.group(1) if end_tag_match else ""
+                proposed_html = f"{start_tag}{target_val}{end_tag}"
+            elif target_attr:
+                # Approximate adding/replacing attribute
+                tag_match = re.match(r"<([a-zA-Z0-9\-]+)([^>]*)>", element_html)
+                if tag_match:
+                    tag = tag_match.group(1)
+                    attrs = tag_match.group(2)
+                    if f"{target_attr}=" in attrs:
+                        attrs = re.sub(rf'{target_attr}=["\'][^"\']*["\']', f'{target_attr}="{target_val}"', attrs)
+                    else:
+                        attrs += f' {target_attr}="{target_val}"'
+                    proposed_html = element_html.replace(tag_match.group(0), f"<{tag}{attrs}>")
+
             critic_result = await self._critic.review(
                 original_html=element_html,
-                proposed_fix=target_val if target_val else target_attr,
+                proposed_fix=proposed_html,
                 wcag_rule=f"{wcag_sc} - {wcag_title}",
                 finding_description=finding_data.get("description", ""),
                 finding_id=finding_id,
