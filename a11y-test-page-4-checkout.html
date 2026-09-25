@@ -90,7 +90,7 @@
   </fieldset>
 
   <!-- AXE: aria-expanded misuse — accordion header has aria-expanded but is a div with no role/tabindex/keyboard handler -->
-  <div class="accordion-header" aria-expanded="false" onclick="toggleAcc(this)">Have a promo code?</div>
+  <button class="accordion-header" aria-expanded="false" aria-controls="promo-panel" onclick="toggleAcc(this)">Have a promo code?</button>
   <div class="accordion-body">
     <input type="text" class="cc-input" placeholder="Promo code (this is the ONLY label)">
     <button type="button">Apply</button>
