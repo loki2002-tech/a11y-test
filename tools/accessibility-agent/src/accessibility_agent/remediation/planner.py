@@ -31,6 +31,7 @@ import re
 from typing import Any
 
 from accessibility_agent.ai.llm_client import create_llm_client
+from accessibility_agent.ai.critic import CriticAgent
 from accessibility_agent.logging_config import get_logger
 from accessibility_agent.remediation.schemas import (
     ProblemType,
@@ -172,6 +173,7 @@ class RemediationPlanner:
     def __init__(self, llm_client=None) -> None:
         self._llm = llm_client or create_llm_client()
         self._rag = RAGEngine()
+        self._critic = CriticAgent(llm_client=self._llm)
         self._llm_enabled = self._llm.provider_name != "disabled"
 
     async def plan(
@@ -316,19 +318,40 @@ class RemediationPlanner:
         attempt_number: int,
         previous_failure: str,
     ) -> RemediationPlan | None:
-        """Generate a plan via LLM with RAG-grounded WCAG context."""
+        """Generate a plan via LLM with Chain-of-Thought reasoning + Critic review."""
         try:
             # Build RAG context
             wcag_context = self._rag.build_context_for_finding(finding_data)
+            element_html = finding_data.get("element", {}).get("html", "")[:300]
 
-            # Build planning prompt
-            prompt = self._build_prompt(
+            # ── PHASE 1: Chain-of-Thought Reasoning ──────────────────────────
+            # Ask the LLM to think through the problem before generating a fix.
+            # Higher temperature (0.3) here allows for broader reasoning.
+            reasoning_prompt = self._build_reasoning_prompt(
+                finding_data, location, ctx, wcag_context, automation_level,
+                attempt_number, previous_failure,
+            )
+            log.info("planner.cot_reasoning_start", finding_id=finding_id, attempt=attempt_number)
+            reasoning_response = await self._llm.generate(
+                prompt=reasoning_prompt,
+                temperature=0.3,
+            )
+            reasoning_text = reasoning_response.text if reasoning_response else ""
+            if not reasoning_text:
+                log.warning("planner.cot_reasoning_empty", finding_id=finding_id)
+                reasoning_text = "No prior reasoning available."
+            else:
+                log.info("planner.cot_reasoning_complete", finding_id=finding_id, reasoning_len=len(reasoning_text))
+
+            # ── PHASE 2: Action — Generate precise JSON fix ───────────────────
+            # Very low temperature (0.05) for deterministic code generation.
+            action_prompt = self._build_prompt(
                 finding_data, location, ctx, wcag_context,
                 automation_level, attempt_number, previous_failure,
+                reasoning_context=reasoning_text,
             )
-
-            log.info("planner.llm_call", finding_id=finding_id, attempt=attempt_number)
-            response = await self._llm.generate(prompt=prompt)
+            log.info("planner.llm_action_call", finding_id=finding_id, attempt=attempt_number)
+            response = await self._llm.generate(prompt=action_prompt, temperature=0.05)
 
             if not response or not response.text:
                 log.warning("planner.llm_empty_response", finding_id=finding_id)
@@ -346,7 +369,7 @@ class RemediationPlanner:
                 log.warning("planner.llm_incomplete_response", finding_id=finding_id)
                 return None
 
-            # ── CRITICAL: Validate target_attribute ───────────────────────────
+            # ── CRITICAL: Validate target_attribute ──────────────────────────
             target_attr = raw.get("target_attribute", "").strip()
             target_val = raw.get("target_value", "").strip()
 
@@ -356,13 +379,38 @@ class RemediationPlanner:
                     finding_id=finding_id,
                     target_attribute=target_attr,
                 )
-                # Route to manual review — don't inject garbage into the HTML
                 return self._manual_review_plan(
                     finding_id, finding_data, ctx,
                     RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED,
                     confidence * 0.5, "llm_validation_failed",
                     wcag_sc, wcag_level, wcag_title,
                 )
+
+            # ── PHASE 3: Critic Review ────────────────────────────────────────
+            # A second LLM call reviews the proposed fix before it touches code.
+            critic_result = await self._critic.review(
+                original_html=element_html,
+                proposed_fix=target_val if target_val else target_attr,
+                wcag_rule=f"{wcag_sc} - {wcag_title}",
+                finding_description=finding_data.get("description", ""),
+                finding_id=finding_id,
+            )
+            if not critic_result.approved:
+                log.warning(
+                    "planner.critic_rejected",
+                    finding_id=finding_id,
+                    reason=critic_result.reason,
+                )
+                # Return None so the caller can retry with the critic's reason as context
+                if attempt_number < 3:
+                    # Inject critic feedback into next attempt via manual_review
+                    return self._manual_review_plan(
+                        finding_id, finding_data, ctx,
+                        RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED,
+                        confidence * 0.5, f"critic_rejected: {critic_result.reason}",
+                        wcag_sc, wcag_level, wcag_title,
+                    )
+                return None
 
             # Map risk level
             risk = str(raw.get("risk_level", "medium")).lower()
@@ -394,7 +442,7 @@ class RemediationPlanner:
                 wcag_level=wcag_level,
                 wcag_title=wcag_title,
                 requires_tests=raw.get("requires_tests", []),
-                reasoning=raw.get("reasoning", response.text[:500]),
+                reasoning=f"[CoT]\n{reasoning_text[:300]}\n\n[Action]\n{raw.get('reasoning', response.text[:200])}",
             )
 
             log.info(
@@ -403,6 +451,7 @@ class RemediationPlanner:
                 problem_type=problem_type.value,
                 target_attribute=plan.target_attribute,
                 risk_level=plan.risk_level,
+                critic_approved=True,
             )
             return plan
 
@@ -493,6 +542,43 @@ class RemediationPlanner:
     # ── Prompt builder ────────────────────────────────────────────────────────
 
     @staticmethod
+    def _build_reasoning_prompt(
+        finding_data: dict[str, Any],
+        location: SourceLocation,
+        ctx: SourceContext,
+        wcag_context: str,
+        automation_level: RemediationAutomationLevel,
+        attempt_number: int,
+        previous_failure: str,
+    ) -> str:
+        """Phase 1 — Chain-of-Thought: ask the LLM to reason about the fix before acting."""
+        element_html = finding_data.get("element", {}).get("html", "")[:300]
+        description = finding_data.get("description", "")
+        rule_id = finding_data.get("rule_id", "")
+
+        return f"""You are a Senior Accessibility Engineer. Before writing any code, think carefully about this accessibility issue.
+
+## Accessibility Violation
+- **Rule ID**: {rule_id}
+- **Description**: {description}
+- **Element HTML**: `{element_html}`
+- **File**: `{location.file_path}` (line {location.start_line})
+- **Element tag**: {ctx.element_tag}
+- **Attributes**: {json.dumps(ctx.element_attributes)}
+- **Framework**: {ctx.framework.value}
+
+{wcag_context}
+
+## Think Through the Following Questions
+1. What is the EXACT root cause of this WCAG violation?
+2. What is the MINIMUM change required to fix it — one attribute, one element swap, or a new insertion?
+3. Is there any risk that adding this fix could break another WCAG rule?
+4. For the `target_attribute`: should I add/modify an attribute, replace the whole element, or insert new markup?
+5. What should the exact `target_value` be, based on the surrounding code context?
+
+Write your reasoning in plain English (3-5 sentences). Do NOT write any JSON or code yet. Just think."""
+
+    @staticmethod
     def _build_prompt(
         finding_data: dict[str, Any],
         location: SourceLocation,
@@ -501,6 +587,7 @@ class RemediationPlanner:
         automation_level: RemediationAutomationLevel,
         attempt_number: int,
         previous_failure: str,
+        reasoning_context: str = "",
     ) -> str:
         """Build the LLM prompt for remediation planning."""
         element_html = finding_data.get("element", {}).get("html", "")[:300]
@@ -516,6 +603,16 @@ The previous fix attempt failed for this reason:
 {previous_failure}
 
 You MUST produce a DIFFERENT fix strategy that avoids this failure.
+"""
+        reasoning_block = ""
+        if reasoning_context:
+            reasoning_block = f"""
+## Your Prior Reasoning (Phase 1 — Chain-of-Thought)
+
+You already analyzed this problem and concluded:
+{reasoning_context[:600]}
+
+Use this reasoning to guide your JSON fix below.
 """
 
         return f"""You are a Senior Accessibility Engineer generating a precise remediation plan.
@@ -548,6 +645,8 @@ You MUST produce a DIFFERENT fix strategy that avoids this failure.
 {wcag_context}
 
 {retry_block}
+
+{reasoning_block}
 
 ## Your Task
 

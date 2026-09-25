@@ -36,8 +36,21 @@ class BaseLLMClient(ABC):
     """Abstract base for all LLM clients."""
 
     @abstractmethod
-    async def generate(self, prompt: str, system: str = "") -> LLMResponse | None:
-        """Generate a response. Returns None if the provider is disabled or fails."""
+    async def generate(
+        self,
+        prompt: str,
+        system: str = "",
+        temperature: float | None = None,
+    ) -> LLMResponse | None:
+        """Generate a response. Returns None if the provider is disabled or fails.
+
+        Args:
+            prompt:      The user-facing prompt text.
+            system:      Optional system instruction prepended to the prompt.
+            temperature: Override the default LLM temperature for this call.
+                         Use ~0.05 for deterministic code patches.
+                         Use ~0.4 for creative label/description generation.
+        """
         ...
 
     @property
@@ -49,7 +62,7 @@ class BaseLLMClient(ABC):
 class DisabledLLMClient(BaseLLMClient):
     """Stub client used when A11Y_LLM_PROVIDER=disabled."""
 
-    async def generate(self, prompt: str, system: str = "") -> LLMResponse | None:
+    async def generate(self, prompt: str, system: str = "", temperature: float | None = None) -> LLMResponse | None:
         return None
 
     @property
@@ -81,21 +94,23 @@ class GeminiLLMClient(BaseLLMClient):
         )
         log.info("llm_client.gemini_initialized", model=settings.llm_model)
 
-    async def generate(self, prompt: str, system: str = "") -> LLMResponse | None:
+    async def generate(self, prompt: str, system: str = "", temperature: float | None = None) -> LLMResponse | None:
+        import google.generativeai as genai  # type: ignore
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
+        effective_temp = temperature if temperature is not None else settings.llm_temperature
         try:
-            log.debug("llm_client.generating", provider="gemini", prompt_len=len(full_prompt))
-            response = self._model.generate_content(full_prompt)
+            log.debug("llm_client.generating", provider="gemini", prompt_len=len(full_prompt), temperature=effective_temp)
+            model = genai.GenerativeModel(
+                model_name=settings.llm_model,
+                generation_config={"temperature": effective_temp, "max_output_tokens": settings.llm_max_tokens},
+            )
+            response = model.generate_content(full_prompt)
             text = response.text
             usage = getattr(response, "usage_metadata", None)
             prompt_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
             completion_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
-            log.info("llm_client.response_received",
-                     provider="gemini",
-                     prompt_tokens=prompt_tokens,
-                     completion_tokens=completion_tokens)
-            return LLMResponse(text=text, model=settings.llm_model,
-                               prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+            log.info("llm_client.response_received", provider="gemini", prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+            return LLMResponse(text=text, model=settings.llm_model, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
         except Exception as exc:
             log.error("llm_client.generate_failed", provider="gemini", error=str(exc))
             return None
@@ -123,23 +138,23 @@ class OpenAILLMClient(BaseLLMClient):
         self._model = settings.llm_model if "gpt" in settings.llm_model else "gpt-4o-mini"
         log.info("llm_client.openai_initialized", model=self._model)
 
-    async def generate(self, prompt: str, system: str = "") -> LLMResponse | None:
+    async def generate(self, prompt: str, system: str = "", temperature: float | None = None) -> LLMResponse | None:
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
+        effective_temp = temperature if temperature is not None else settings.llm_temperature
         try:
-            log.debug("llm_client.generating", provider="openai", prompt_len=len(prompt))
+            log.debug("llm_client.generating", provider="openai", prompt_len=len(prompt), temperature=effective_temp)
             response = await self._client.chat.completions.create(
                 model=self._model,
                 messages=messages,
-                temperature=settings.llm_temperature,
+                temperature=effective_temp,
                 max_tokens=settings.llm_max_tokens,
             )
             text = response.choices[0].message.content or ""
             usage = response.usage
-            log.info("llm_client.response_received",
-                     provider="openai",
+            log.info("llm_client.response_received", provider="openai",
                      prompt_tokens=usage.prompt_tokens if usage else 0,
                      completion_tokens=usage.completion_tokens if usage else 0)
             return LLMResponse(text=text, model=self._model,
@@ -166,9 +181,9 @@ class OllamaLLMClient(BaseLLMClient):
         self._model = settings.llm_model
         log.info("llm_client.ollama_initialized", model=self._model, url=self._url)
 
-    async def generate(self, prompt: str, system: str = "") -> LLMResponse | None:
+    async def generate(self, prompt: str, system: str = "", temperature: float | None = None) -> LLMResponse | None:
         import httpx
-        
+        effective_temp = temperature if temperature is not None else settings.llm_temperature
         payload = {
             "model": self._model,
             "prompt": prompt,
@@ -176,27 +191,21 @@ class OllamaLLMClient(BaseLLMClient):
             "stream": False,
             "format": "json",
             "options": {
-                "temperature": settings.llm_temperature,
+                "temperature": effective_temp,
                 "num_predict": settings.llm_max_tokens,
             }
         }
-        
         try:
-            log.debug("llm_client.generating", provider="ollama", prompt_len=len(prompt))
-            # Generous timeout for local execution
+            log.debug("llm_client.generating", provider="ollama", prompt_len=len(prompt), temperature=effective_temp)
             async with httpx.AsyncClient(timeout=180.0) as client:
                 resp = await client.post(self._url, json=payload)
                 resp.raise_for_status()
                 data = resp.json()
-                
                 text = data.get("response", "")
                 prompt_tokens = data.get("prompt_eval_count", 0)
                 completion_tokens = data.get("eval_count", 0)
-                
-                log.info("llm_client.response_received",
-                         provider="ollama",
-                         prompt_tokens=prompt_tokens,
-                         completion_tokens=completion_tokens)
+                log.info("llm_client.response_received", provider="ollama",
+                         prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
                 return LLMResponse(text=text, model=self._model,
                                    prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
         except Exception as exc:
@@ -232,7 +241,7 @@ class GroqLLMClient(BaseLLMClient):
         self._model = settings.llm_model
         log.info("llm_client.groq_initialized", model=self._model, total_keys=len(self._keys))
 
-    async def generate(self, prompt: str, system: str = "") -> LLMResponse | None:
+    async def generate(self, prompt: str, system: str = "", temperature: float | None = None) -> LLMResponse | None:
         import asyncio
 
         messages = []
@@ -241,17 +250,18 @@ class GroqLLMClient(BaseLLMClient):
         messages.append({"role": "user", "content": prompt})
 
         from groq import AsyncGroq
+        effective_temp = temperature if temperature is not None else settings.llm_temperature
 
         # Two full passes: first try all keys, if all rate-limited wait 60s and retry
         for pass_num in range(2):
             max_retries = len(self._keys)
             for attempt in range(max_retries):
                 try:
-                    log.debug("llm_client.generating", provider="groq", prompt_len=len(prompt), key_idx=self._current_key_idx)
+                    log.debug("llm_client.generating", provider="groq", prompt_len=len(prompt), key_idx=self._current_key_idx, temperature=effective_temp)
                     response = await self._client.chat.completions.create(
                         model=self._model,
                         messages=messages,
-                        temperature=settings.llm_temperature,
+                        temperature=effective_temp,
                         max_tokens=settings.llm_max_tokens,
                     )
                     text = response.choices[0].message.content or ""
