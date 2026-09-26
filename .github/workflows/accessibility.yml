@@ -1,4 +1,4 @@
-﻿name: AI Accessibility Auto-Remediation
+name: AI Accessibility Auto-Remediation
 
 on:
   push:
@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         page:
           - index.html
@@ -100,6 +101,7 @@ jobs:
               echo "Triggering Remediation Agent for $file..."
               python -m accessibility_agent.cli remediate \
                 --finding "$file" \
+                --output "result_${file}" \
                 --repo . || true
               sleep 2
             fi
@@ -113,26 +115,39 @@ jobs:
           python -c "
           import json, glob, subprocess, os
 
-          files = sorted(glob.glob('finding_*.json'))
+          # Read the output results, not the inputs!
+          result_files = sorted(glob.glob('result_finding_*.json'))
           manual = []
-          for f in files:
+          for res_file in result_files:
               try:
-                  d = json.load(open(f))
-                  rule = d.get('rule_id', 'unknown')
-                  sc   = d.get('wcag', {}).get('success_criterion', '?')
-                  fid  = d.get('finding_id', '?')
-                  desc = d.get('description', '')[:120]
+                  res = json.load(open(res_file))
+                  status = res.get('status')
                   
-                  element = d.get('element', {})
-                  html = element.get('html', 'N/A')
-                  if len(html) > 50: html = html[:47] + '...'
-                  html = html.replace('|', '\|').replace('\n', ' ')
-                  
-                  selector = element.get('selector', 'N/A')
-                  if isinstance(selector, list): selector = selector[0] if selector else 'N/A'
-                  selector = str(selector).replace('|', '\|')
-                  
-                  manual.append((fid, rule, sc, desc, html, selector))
+                  # Only escalate genuine manual review requirements
+                  if status == 'MANUAL_REVIEW' or status == 'FAILED':
+                      notes = res.get('manual_review_notes', '')
+                      if 'FALSE POSITIVE' in notes or 'LLM planning unavailable' in notes:
+                          continue # Filter out False Positives and rate-limit drops
+                      
+                      # Extract the original finding details
+                      finding_file = res_file.replace('result_', '')
+                      d = json.load(open(finding_file))
+                      
+                      rule = d.get('rule_id', 'unknown')
+                      sc   = d.get('wcag', {}).get('success_criterion', '?')
+                      fid  = d.get('finding_id', '?')
+                      desc = d.get('description', '')[:120]
+                      
+                      element = d.get('element', {})
+                      html = element.get('html', 'N/A')
+                      if len(html) > 50: html = html[:47] + '...'
+                      html = html.replace('|', '\|').replace('\n', ' ')
+                      
+                      selector = element.get('selector', 'N/A')
+                      if isinstance(selector, list): selector = selector[0] if selector else 'N/A'
+                      selector = str(selector).replace('|', '\|')
+                      
+                      manual.append((fid, rule, sc, desc, html, selector, notes[:200]))
               except Exception:
                   pass
 
@@ -145,11 +160,11 @@ jobs:
               '',
               'The AI agent scanned this page and found the following issues that **cannot be auto-fixed** and need a human developer to resolve.',
               '',
-              '| # | Finding ID | Rule | WCAG SC | CSS Selector | HTML Snippet | Description |',
-              '|---|-----------|------|---------|-------------|--------------|-------------|',
+              '| # | Finding ID | Rule | WCAG SC | CSS Selector | HTML Snippet | Description | AI Notes |',
+              '|---|-----------|------|---------|-------------|--------------|-------------|----------|',
           ]
-          for i, (fid, rule, sc, desc, html, selector) in enumerate(manual, 1):
-              lines.append(f'| {i} | \{fid}\ | \{rule}\ | {sc} | \{selector}\ | \{html}\ | {desc} |')
+          for i, (fid, rule, sc, desc, html, selector, notes) in enumerate(manual, 1):
+              lines.append(f'| {i} | `{fid}` | `{rule}` | {sc} | `{selector}` | `{html}` | {desc} | {notes} |')
 
           body = '\n'.join(lines)
           with open('/tmp/issue_body.md', 'w') as f:
