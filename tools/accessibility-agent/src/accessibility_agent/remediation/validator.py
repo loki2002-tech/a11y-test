@@ -95,7 +95,7 @@ _SECRET_PATTERNS = [
     r'(?i)(?:api[_-]?key|secret|token|auth)[^>]*content\s*=\s*[\'"][a-zA-Z0-9+/=_\-]{20,}[\'"]',
 ]
 
-# ARIA anti-patterns that should never be introduced (Gate 7)
+# ARIA and structural anti-patterns that should never be introduced (Gate 7)
 _INVALID_ARIA_PATTERNS = [
     (
         r'aria-hidden\s*=\s*"true"[^>]*(?:href|onclick|tabindex|type\s*=\s*"(?:button|submit))',
@@ -112,6 +112,32 @@ _INVALID_ARIA_PATTERNS = [
     (
         r'tabindex\s*=\s*"[1-9]\d*"',
         "Positive tabindex disrupts tab order"
+    ),
+    # ── New structural anti-patterns from audit ───────────────────────────────
+    (
+        r'<input[^>]+for\s*=\s*"',
+        "for= attribute is invalid on <input> — it belongs on <label> elements only"
+    ),
+    (
+        r'<title[^>]*>\s*<h[1-6]',
+        "<h1>–<h6> inside <title> is invalid HTML — title must contain plain text only"
+    ),
+    (
+        r'<title[^>]*>\s*<',
+        "HTML element inside <title> is invalid — title must be plain text"
+    ),
+    (
+        r'role\s*=\s*"region"\s[^>]*aria-label[^>]*>\s*(?:(?!</).)*</div>',
+        "Check: role=region replacing an existing semantic landmark role (contentinfo/banner/main/nav) is a regression"
+    ),
+    (
+        # Detect: button with aria-hidden=true AND tabindex=-1 added to element that already has aria-hidden on parent
+        r'<button[^>]+aria-hidden\s*=\s*"true"[^>]+tabindex\s*=\s*"-1"',
+        "Adding aria-hidden=true + tabindex=-1 to button buries it deeper — correct fix is removing aria-hidden from the parent div"
+    ),
+    (
+        r'<a[^>]+class\s*=\s*"skip[^"]*"[^>]+id\s*=\s*"',
+        "Adding id= to the skip LINK rather than the skip LINK TARGET is incorrect — the id belongs on <main> or the target element"
     ),
 ]
 
