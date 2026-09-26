@@ -1,4 +1,4 @@
-name: AI Accessibility Auto-Remediation
+﻿name: AI Accessibility Auto-Remediation
 
 on:
   push:
@@ -12,6 +12,16 @@ permissions:
 jobs:
   a11y-scan-and-fix:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        page:
+          - index.html
+          - a11y-test-page-2-dashboard.html
+          - a11y-test-page-3-news.html
+          - a11y-test-page-4-checkout.html
+          - a11y-test-page-5-app.html
+          - a11y-test-page-6-hotel.html
     
     steps:
       - name: Checkout code
@@ -40,38 +50,24 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          # 0. Configure Git identity
           git config --global user.name "accessibility-agent[bot]"
           git config --global user.email "accessibility-agent[bot]@users.noreply.github.com"
           
-          # 1. Run the scan across ALL pages
-          PAGES=(
-            "http://localhost:8080/index.html"
-            "http://localhost:8080/a11y-test-page-2-dashboard.html"
-            "http://localhost:8080/a11y-test-page-3-news.html"
-            "http://localhost:8080/a11y-test-page-4-checkout.html"
-            "http://localhost:8080/a11y-test-page-5-app.html"
-            "http://localhost:8080/a11y-test-page-6-hotel.html"
-          )
-          
           mkdir -p reports
+          PAGE_URL="http://localhost:8080/${{ matrix.page }}"
           
-          for PAGE_URL in "${PAGES[@]}"; do
-            echo "==> Scanning: $PAGE_URL"
-            python -m accessibility_agent.cli scan \
-              --url "$PAGE_URL" \
-              --mode automated \
-              --agentic \
-              --output ./reports || true
-            sleep 2
-          done
-
-          # 2. Extract and deduplicate all findings from all report files
-          echo "Looking for findings across all pages..."
+          echo "==> Scanning: $PAGE_URL"
+          python -m accessibility_agent.cli scan \
+            --url "$PAGE_URL" \
+            --mode automated \
+            --agentic \
+            --output ./reports || true
+            
+          echo "Looking for findings..."
           python -c "
           import json, glob, sys
           try:
-              files = sorted(glob.glob('reports/*_report.json'))
+              files = glob.glob('reports/*_report.json')
               if not files: sys.exit(0)
               
               seen = set()
@@ -91,23 +87,21 @@ jobs:
                   except Exception as e:
                       print(f'Error reading {report_file}: {e}')
               
-              print(f'Total unique findings across all pages: {len(unique)}')
+              print(f'Total unique findings: {len(unique)}')
               for i, finding in enumerate(unique):
-                  print(f'Finding {i}: {finding[\"finding_id\"]} | page: {finding.get(\"url\",\"\")}')
                   with open(f'finding_{i}.json', 'w') as out:
                       json.dump(finding, out)
           except Exception as e:
               print('Error:', e)
           "
           
-          # 3. Trigger the remediation agent for each finding (with delay to avoid rate limits)
           for file in finding_*.json; do
             if [ -f "$file" ]; then
               echo "Triggering Remediation Agent for $file..."
               python -m accessibility_agent.cli remediate \
                 --finding "$file" \
                 --repo . || true
-              sleep 5
+              sleep 2
             fi
           done
 
@@ -119,7 +113,6 @@ jobs:
           python -c "
           import json, glob, subprocess, os
 
-          # Collect all findings that were written as finding_X.json
           files = sorted(glob.glob('finding_*.json'))
           manual = []
           for f in files:
@@ -130,7 +123,6 @@ jobs:
                   fid  = d.get('finding_id', '?')
                   desc = d.get('description', '')[:120]
                   
-                  # Extract HTML snippet and CSS selector
                   element = d.get('element', {})
                   html = element.get('html', 'N/A')
                   if len(html) > 50: html = html[:47] + '...'
@@ -148,48 +140,36 @@ jobs:
               print('No findings to report.')
               exit(0)
 
-          # Build issue body
           lines = [
-              '## ♿ Accessibility Findings Requiring Manual Review',
+              '## ♿ Accessibility Findings for ${{ matrix.page }}',
               '',
-              'The AI agent scanned the page and found the following issues that **cannot be auto-fixed** and need a human developer to resolve.',
+              'The AI agent scanned this page and found the following issues that **cannot be auto-fixed** and need a human developer to resolve.',
               '',
               '| # | Finding ID | Rule | WCAG SC | CSS Selector | HTML Snippet | Description |',
               '|---|-----------|------|---------|-------------|--------------|-------------|',
           ]
           for i, (fid, rule, sc, desc, html, selector) in enumerate(manual, 1):
-              lines.append(f'| {i} | \`{fid}\` | \`{rule}\` | {sc} | \`{selector}\` | \`{html}\` | {desc} |')
+              lines.append(f'| {i} | \{fid}\ | \{rule}\ | {sc} | \{selector}\ | \{html}\ | {desc} |')
 
-          lines += [
-              '',
-              '---',
-              '_This issue is auto-generated by the AI Accessibility Agent on every push to main._',
-              '_Issues with an open PR have already been auto-remediated — only the above remain._',
-          ]
           body = '\n'.join(lines)
-
-          # Write body to temp file to avoid shell escaping issues
           with open('/tmp/issue_body.md', 'w') as f:
               f.write(body)
 
           repo = os.environ.get('GITHUB_REPOSITORY', '')
-          title = f'[A11y] {len(manual)} findings require manual review'
+          title = f'[A11y] Findings requiring manual review for ${{ matrix.page }}'
 
-          # Check if an open issue with the same label already exists
           result = subprocess.run(
-              ['gh', 'issue', 'list', '--repo', repo, '--label', 'accessibility', '--state', 'open', '--json', 'number'],
+              ['gh', 'issue', 'list', '--repo', repo, '--search', f'in:title \"{title}\"', '--state', 'open', '--json', 'number'],
               capture_output=True, text=True
           )
           existing = json.loads(result.stdout or '[]')
 
           if existing:
-              # Update the existing issue
               issue_num = existing[0]['number']
               subprocess.run(['gh', 'issue', 'edit', str(issue_num), '--repo', repo,
                               '--title', title, '--body-file', '/tmp/issue_body.md'])
               print(f'Updated existing issue #{issue_num}')
           else:
-              # Create a new issue
               subprocess.run(['gh', 'issue', 'create', '--repo', repo,
                               '--title', title,
                               '--body-file', '/tmp/issue_body.md',
