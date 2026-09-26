@@ -203,7 +203,45 @@ class RemediationAgent:
 
         result.source_location = source_location
 
+        # ─── Phase 1.5: Stage 0 — Finding Validation ─────────────────────────
+        # CRITICAL: Validate the scanner finding BEFORE any fix is generated.
+        # This is the primary defence against false positives and scanner over-trust.
+        try:
+            from accessibility_agent.remediation.finding_validator import FindingValidator
+            source_context_for_validation = self._analyzer.analyze(source_location, finding_data)
+            fv_result = FindingValidator().validate(finding_data, source_context_for_validation)
+            log.info(
+                "agent.finding_validation",
+                finding_id=finding.finding_id,
+                verdict=fv_result.verdict,
+                confidence=fv_result.confidence,
+                reason=fv_result.reason[:100],
+            )
+            if fv_result.verdict == "FALSE_POSITIVE":
+                result.status = RemediationStatus.MANUAL_REVIEW
+                result.manual_review_notes = (
+                    f"FINDING VALIDATOR: FALSE POSITIVE — {fv_result.reason}"
+                )
+                result.duration_seconds = time.monotonic() - start_time
+                log.info(
+                    "agent.false_positive_blocked",
+                    finding_id=finding.finding_id,
+                    reason=fv_result.reason,
+                )
+                return result
+            if fv_result.verdict == "MANUAL_REVIEW_REQUIRED":
+                return self._manual_review(
+                    result,
+                    f"FINDING VALIDATOR: {fv_result.reason}",
+                    start_time,
+                )
+        except ImportError:
+            log.warning("agent.finding_validator_not_available", finding_id=finding.finding_id)
+        except Exception as exc:
+            log.warning("agent.finding_validator_error", finding_id=finding.finding_id, error=str(exc))
+
         # ─── Phase 2: Classify + Plan ────────────────────────────────────────
+
         classification = self._classify(finding_data, source_location)
         if classification == RemediationAutomationLevel.DO_NOT_AUTO_REMEDIATE:
             return self._manual_review(result, "Classifier: DO_NOT_AUTO_REMEDIATE", start_time)

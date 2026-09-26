@@ -362,6 +362,41 @@ class RemediationPlanner:
                 log.warning("planner.llm_json_parse_failed", finding_id=finding_id)
                 return None
 
+            # ── GATE 0: False Positive Check ─────────────────────────────────
+            # The LLM can now signal that the scanner was WRONG.
+            if raw.get("is_false_positive", False):
+                fp_reason = raw.get("false_positive_reason", "LLM identified this as a false positive.")
+                log.info(
+                    "planner.false_positive_detected",
+                    finding_id=finding_id,
+                    reason=fp_reason[:120],
+                )
+                # Return a manual-review plan that marks this as a false positive
+                plan = self._manual_review_plan(
+                    finding_id, finding_data, ctx,
+                    RemediationAutomationLevel.DO_NOT_AUTO_REMEDIATE,
+                    confidence, "llm_false_positive",
+                    wcag_sc, wcag_level, wcag_title,
+                )
+                plan.manual_review_reason = f"FALSE POSITIVE: {fp_reason}"
+                plan.reasoning = f"LLM identified this as a scanner false positive: {fp_reason}"
+                return plan
+
+            # ── GATE 1: Complex Widget / Manual Review ────────────────────────
+            if raw.get("requires_manual_review", False):
+                manual_reason = raw.get("manual_review_reason", "Complex widget requiring human analysis.")
+                log.info(
+                    "planner.llm_escalated_to_manual",
+                    finding_id=finding_id,
+                    reason=manual_reason[:120],
+                )
+                return self._manual_review_plan(
+                    finding_id, finding_data, ctx,
+                    RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED,
+                    confidence, "llm_escalated",
+                    wcag_sc, wcag_level, wcag_title,
+                )
+
             # Validate required fields
             root_cause = raw.get("root_cause", "").strip()
             fix_strategy = raw.get("fix_strategy", "").strip()
@@ -369,7 +404,7 @@ class RemediationPlanner:
                 log.warning("planner.llm_incomplete_response", finding_id=finding_id)
                 return None
 
-            # ── CRITICAL: Validate target_attribute ──────────────────────────
+            # ── GATE 2: Validate target_attribute ────────────────────────────
             target_attr = raw.get("target_attribute", "").strip()
             target_val = raw.get("target_value", "").strip()
 
@@ -386,8 +421,9 @@ class RemediationPlanner:
                     wcag_sc, wcag_level, wcag_title,
                 )
 
-            # ── PHASE 3: Critic Review ────────────────────────────────────────
+            # ── PHASE 3: Adversarial Critic Review ───────────────────────────
             # A second LLM call reviews the proposed fix before it touches code.
+
             
             # Synthesize a rough proposed HTML for the critic to evaluate
             proposed_html = element_html
@@ -575,32 +611,58 @@ class RemediationPlanner:
         attempt_number: int,
         previous_failure: str,
     ) -> str:
-        """Phase 1 — Chain-of-Thought: ask the LLM to reason about the fix before acting."""
-        element_html = finding_data.get("element", {}).get("html", "")[:300]
+        """Phase 1 — Investigation & Root-Cause Analysis before any fix is generated."""
+        element_html = finding_data.get("element", {}).get("html", "")[:400]
         description = finding_data.get("description", "")
         rule_id = finding_data.get("rule_id", "")
+        selector = finding_data.get("element", {}).get("selector", "")
 
-        return f"""You are a Senior Accessibility Engineer. Before writing any code, think carefully about this accessibility issue.
+        return f"""You are a Principal Accessibility Engineer conducting an evidence-based investigation.
 
-## Accessibility Violation
-- **Rule ID**: {rule_id}
-- **Description**: {description}
-- **Element HTML**: `{element_html}`
-- **File**: `{location.file_path}` (line {location.start_line})
+A scanner reported this violation. Your job is to INVESTIGATE it — scanners can be WRONG.
+
+## Scanner Report
+- **Rule**: {rule_id}
+- **Message**: {description}
+- **Element**: `{element_html}`
+- **Selector**: `{selector}`
+- **File**: `{location.file_path}` line {location.start_line}
 - **Element tag**: {ctx.element_tag}
-- **Attributes**: {json.dumps(ctx.element_attributes)}
-- **Framework**: {ctx.framework.value}
+- **All attributes found**: {json.dumps(ctx.element_attributes)}
+- **Nearby labels in source**: {ctx.nearby_labels}
+- **Parent element**: {ctx.parent_element}
+- **Event handlers**: {ctx.event_handler_names}
+
+## Source Code Block
+```{ctx.language}
+{ctx.block_source}
+```
 
 {wcag_context}
 
-## Think Through the Following Questions
-1. What is the EXACT root cause of this WCAG violation?
-2. What is the MINIMUM change required to fix it — one attribute, one element swap, or a new insertion?
-3. Is there any risk that adding this fix could break another WCAG rule?
-4. For the `target_attribute`: should I add/modify an attribute, replace the whole element, or insert new markup?
-5. What should the exact `target_value` be, based on the surrounding code context?
+## Investigation Questions — Answer ALL:
 
-Write your reasoning in plain English (3-5 sentences). Do NOT write any JSON or code yet. Just think."""
+1. **Is the scanner correct?** Could any of these already satisfy the requirement?
+   - aria-label / aria-labelledby on the element
+   - Native <label for="..."> linked by id
+   - Visible text content (inner text of element)
+   - title attribute
+   - A semantic element that implies the role (e.g. <button>, <main>)
+
+2. **What is the exact root cause?** (Not the scanner message — the actual technical failure)
+
+3. **Is this a complex interactive widget?** (accordion, modal, tab, menu, combobox, carousel, drag-drop)
+   If yes, full behavioral analysis is required — automatic patching is UNSAFE.
+
+4. **What is the safest minimal fix?** Rank by preference:
+   a) Native HTML element or relationship
+   b) Native HTML attribute correction
+   c) ARIA — ONLY if native is genuinely impossible
+
+5. **What risks exist?** Could this fix create an accessible-name / visible-label mismatch?
+   Could it break keyboard interaction or an existing screen-reader relationship?
+
+Write 4–6 sentences of investigation conclusions. Do NOT write JSON or code yet."""
 
     @staticmethod
     def _build_prompt(
@@ -613,115 +675,109 @@ Write your reasoning in plain English (3-5 sentences). Do NOT write any JSON or 
         previous_failure: str,
         reasoning_context: str = "",
     ) -> str:
-        """Build the LLM prompt for remediation planning."""
-        element_html = finding_data.get("element", {}).get("html", "")[:300]
+        """Phase 2 — Native-First, Investigation-Driven action prompt."""
+        element_html = finding_data.get("element", {}).get("html", "")[:400]
         description = finding_data.get("description", "")
         rule_id = finding_data.get("rule_id", "")
+        selector = finding_data.get("element", {}).get("selector", "")
 
         retry_block = ""
         if attempt_number > 1 and previous_failure:
             retry_block = f"""
 ## Previous Attempt Failed (Attempt {attempt_number - 1})
 
-The previous fix attempt failed for this reason:
-{previous_failure}
+Failure reason: {previous_failure}
 
-You MUST produce a DIFFERENT fix strategy that avoids this failure.
+You MUST produce a DIFFERENT strategy that avoids this failure.
 """
         reasoning_block = ""
         if reasoning_context:
             reasoning_block = f"""
-## Your Prior Reasoning (Phase 1 — Chain-of-Thought)
+## Phase 1 Investigation Findings
 
-You already analyzed this problem and concluded:
-{reasoning_context[:600]}
+Your investigation concluded:
+{reasoning_context[:800]}
 
-Use this reasoning to guide your JSON fix below.
+Use this evidence as the foundation for your JSON plan.
 """
 
-        return f"""You are a Senior Accessibility Engineer generating a precise remediation plan.
+        return f"""You are a Principal Accessibility Engineer generating a MINIMAL, VERIFIED remediation plan.
 
-## Accessibility Finding
+## ABSOLUTE RULES
+
+**RULE 0 — FALSE POSITIVE CHECK.**
+If ANY existing mechanism already satisfies the requirement (aria-label, aria-labelledby, native label, visible text, title, semantic element role):
+  → Set `is_false_positive: true`. Do NOT generate a fix.
+
+**RULE 1 — NATIVE HTML OVER ARIA.**
+Fix order: 1) Native HTML element  2) Native relationship (label for)  3) Native structure  4) ARIA only if native is impossible.
+
+**RULE 2 — COMPLEX WIDGETS → MANUAL REVIEW.**
+accordion, modal, dialog, tab, menu, combobox, listbox, carousel, tree, slider → `requires_manual_review: true`.
+
+**RULE 3 — NO ACCESSIBLE NAME MISMATCH.**
+Never add aria-label that conflicts with visible text. Never aria-label when <label for="..."> is the correct fix.
+
+**RULE 4 — NO UNVERIFIED STATE ATTRIBUTES.**
+Never add aria-expanded/aria-selected/aria-checked unless JavaScript provably maintains state.
+
+**RULE 5 — MINIMUM CHANGE ONLY.**
+
+**RULE 6 — REJECT IF UNCERTAIN → requires_manual_review: true.**
+
+---
+
+## Finding
 
 - **Rule ID**: {rule_id}
 - **Description**: {description}
+- **Selector**: `{selector}`
 - **Element HTML**: `{element_html}`
-- **Automation Level**: {automation_level.value} (pre-classified — do not override)
 - **File**: `{location.file_path}` (line {location.start_line}–{location.end_line})
-- **Language**: {ctx.language}
-- **Framework**: {ctx.framework.value}
+- **Language**: {ctx.language} / **Framework**: {ctx.framework.value}
 
-## Source Code Context
+## Source Code
 
 ```{ctx.language}
 {ctx.block_source}
 ```
 
-## Element Analysis
+## Element
 
-- **Tag**: {ctx.element_tag}
-- **Attributes**: {json.dumps(ctx.element_attributes)}
-- **Is inside form**: {ctx.is_inside_form}
-- **Is icon-only**: {ctx.is_icon_only}
+- **Tag**: {ctx.element_tag} | **Attrs**: {json.dumps(ctx.element_attributes)}
+- **Inside form**: {ctx.is_inside_form} | **Icon-only**: {ctx.is_icon_only}
 - **Nearby labels**: {ctx.nearby_labels}
-- **Has event handlers**: {ctx.has_event_handlers} ({', '.join(ctx.event_handler_names)})
+- **Parent**: {ctx.parent_element}
+- **Event handlers**: {ctx.has_event_handlers} — {ctx.event_handler_names}
 
 {wcag_context}
-
 {retry_block}
-
 {reasoning_block}
 
-## Your Task
+## target_attribute Encoding
 
-Produce a precise remediation plan as a JSON object.
+Add/change one attr → `"aria-label"` + value | Replace element → `"__REPLACE_ELEMENT__"` + full HTML | Insert new → `""` + HTML (state WHERE in fix_strategy) | Remove → attr name + `"__REMOVE__"` | Multi-attr → `"role|aria-label"` + `"region|Banner"`
 
-### CRITICAL RULES — READ ALL BEFORE RESPONDING:
-
-**RULE 1 — target_attribute MUST be a real HTML/ARIA attribute name.**
-VALID examples: `aria-label`, `lang`, `alt`, `role`, `for`, `tabindex`,
-`aria-labelledby`, `aria-hidden`, `title`, `type`, `value`, `src`, `href`,
-`scope`, `aria-live`, `aria-required`, `aria-describedby`
-NEVER USE tag names as attributes: h1, h2, p, div, span, marquee, section, nav
-NEVER USE made-up words: tag, element, content, text, heading, paragraph
-
-**RULE 2 — To INSERT a new element (e.g. add an h1 heading, add a label):**
-- Set `target_attribute` to `""` (empty string)
-- Set `target_value` to the complete HTML to insert, e.g. `"<h1>ShopNow</h1>"`
-- Set `problem_type` to `"missing_markup"`
-- Describe WHERE to insert clearly in `fix_strategy`
-
-**RULE 3 — To REPLACE one element with another (e.g. marquee → p, div → button):**
-- Set `target_attribute` to `"__REPLACE_ELEMENT__"`
-- Set `target_value` to the FULL replacement element with same text content,
-  e.g. `"<p class=\\"marquee-text\\">Free shipping on orders over $50!</p>"`
-- Set `problem_type` to `"missing_markup"`
-
-**RULE 4 — To add ONE attribute (e.g. aria-label, lang, alt, role):**
-- Set `target_attribute` to the exact attribute name (e.g. `"aria-label"`)
-- Set `target_value` to the exact value (e.g. `"Search"`)
-
-**RULE 5 — To add TWO attributes simultaneously (e.g. role + aria-label):**
-- Set `target_attribute` to `"role|aria-label"` (pipe-separated)
-- Set `target_value` to `"region|Hero Banner"` (pipe-separated, same order)
-
-**RULE 6 — To REMOVE an attribute:** Set `target_value` to `"__REMOVE__"`.
-
-**RULE 7 — Minimum change only.** Do not touch unrelated code.
-
-Respond with ONLY this JSON (no markdown, no explanation outside the JSON):
+Respond with ONLY this JSON:
 
 {{
+  "is_false_positive": false,
+  "false_positive_reason": "",
+  "requires_manual_review": false,
+  "manual_review_reason": "",
+  "widget_pattern": "simple_attribute",
+  "investigation_summary": "What existing accessible name mechanisms were checked and what was found",
   "problem_type": "{ctx.problem_type.value}",
-  "root_cause": "Clear sentence explaining why this is a WCAG violation",
-  "fix_strategy": "Exact description: what element/attribute to add/modify/remove and where",
-  "expected_change": "One-line human summary, e.g. 'Add aria-label=\\"Register\\" to button on line 36'",
-  "target_attribute": "Real HTML/ARIA attribute, or empty string for element insert, or __REPLACE_ELEMENT__ for element swap, or pipe-separated for multi-attribute",
-  "target_value": "Exact value, complete new element HTML, or __REMOVE__",
+  "root_cause": "Precise technical sentence: exact condition causing the WCAG failure",
+  "native_solution_considered": "What native HTML fix was evaluated and why chosen or rejected",
+  "fix_strategy": "Exact: what element/attribute to add/modify/remove and where in the file",
+  "expected_change": "Human one-liner e.g. 'Add lang=\\"en\\" to <html>'",
+  "target_attribute": "Real HTML/ARIA attribute, __REPLACE_ELEMENT__, empty string, or pipe-separated",
+  "target_value": "Exact value, full replacement HTML, or __REMOVE__",
   "risk_level": "low|medium|high",
-  "risk_assessment": "What could go wrong with this specific fix",
+  "risk_assessment": "What existing accessibility could break; keyboard/screen-reader effects",
   "requires_tests": [],
-  "reasoning": "Step-by-step reasoning for this fix choice"
+  "reasoning": "Step-by-step justification for this exact fix"
 }}"""
 
     # ── JSON extractor ────────────────────────────────────────────────────────

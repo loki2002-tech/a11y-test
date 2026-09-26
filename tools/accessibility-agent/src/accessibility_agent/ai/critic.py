@@ -112,18 +112,10 @@ class CriticAgent:
         wcag_rule: str,
         finding_description: str,
     ) -> str:
-        return f"""You are a Senior WCAG Accessibility Auditor performing a code review.
+        return f"""You are a hostile, adversarial Senior WCAG Accessibility Auditor.
+Your ONLY job is to find reasons why the proposed fix is WRONG.
 
-## Your Task
-Review whether the proposed HTML fix correctly resolves the accessibility violation described below.
-Be strict. Reject fixes that:
-- Introduce invalid HTML (e.g. closing tags as attribute values, malformed elements)
-- Add attributes to the wrong element (e.g. `for` on an `<input>` instead of a `<label>`)
-- Make the accessibility problem worse or introduce a NEW WCAG violation
-- Are a no-op (the fix is identical to the original)
-- Use placeholder values like "TODO", "FIXME", "lorem ipsum", or "your-label-here"
-
-## Accessibility Violation
+## The Accessibility Violation
 - **WCAG Rule**: {wcag_rule}
 - **Description**: {finding_description}
 
@@ -137,17 +129,38 @@ Be strict. Reject fixes that:
 {proposed_fix[:500]}
 ```
 
-## Your Response
-Respond with ONLY this JSON (no markdown, no extra text):
+## Adversarial Review Checklist — Check ALL of these:
+
+1. **False positive risk**: Does the original HTML already satisfy the requirement through a mechanism not shown here (aria-labelledby, native label, visible text, title, semantic role)?
+
+2. **Accessible name conflict**: Does the proposed fix introduce an `aria-label` that conflicts with visible text content? Would a screen reader announce a name different from what the user sees?
+
+3. **ARIA validity**: Is every ARIA attribute, role, and property valid? Are referenced IDs guaranteed to exist in the DOM?
+
+4. **Native HTML preference violation**: Is this fix using ARIA when a simpler, more robust native HTML fix was available (e.g., using `aria-label` when a `<label>` element would be better)?
+
+5. **Complex widget incompleteness**: If this is an interactive control (accordion, modal, tab, combobox), does this fix address the COMPLETE interaction model — semantics, keyboard, focus, and state — or only a superficial attribute?
+
+6. **State attribute accuracy**: If the fix adds `aria-expanded`, `aria-selected`, `aria-checked`, etc., is there proof that JavaScript maintains this state at runtime? Static HTML with hardcoded state attributes is often WRONG.
+
+7. **Regression risk**: Could this fix break existing accessibility features that were previously working? Could it remove a correct role, override a correct name, or hide content from assistive technology?
+
+8. **Syntax validity**: Is the proposed HTML syntactically valid? Are there unclosed tags, malformed attributes, or duplicate attribute names?
+
+9. **No-op check**: Is the proposed fix identical to the original (or does it change something irrelevant)?
+
+10. **Placeholder/lorem values**: Does the fix use placeholder text like "TODO", "FIXME", "your-label-here", or "lorem ipsum"?
+
+## Your verdict
+
+If you find ANY credible, unresolved problem → reject the fix.
+A "credible problem" is one that you can specifically name and that is not clearly addressed by the proposed change.
+Do not reject based on hypothetical edge cases that are clearly out of scope.
+
+Respond with ONLY this JSON (no markdown, no text outside):
 {{
   "approved": true,
-  "reason": "The fix correctly adds aria-label to the button, resolving the WCAG 4.1.2 violation."
-}}
-
-OR if you reject it:
-{{
-  "approved": false,
-  "reason": "The fix adds the `for` attribute to the <input> instead of the <label>. The `for` attribute is only valid on <label> elements."
+  "reason": "Specific technical justification for approval or rejection"
 }}"""
 
     @staticmethod
