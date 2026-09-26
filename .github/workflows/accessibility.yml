@@ -121,7 +121,7 @@ jobs:
           for res_file in result_files:
               try:
                   res = json.load(open(res_file))
-                  status = res.get('status')
+                  status = res.get('status', '').upper()
                   
                   # Only escalate genuine manual review requirements
                   if status == 'MANUAL_REVIEW' or status == 'FAILED':
