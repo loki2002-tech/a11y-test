@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- AXE meta-viewport: zoom disabled (WCAG 1.4.4) -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- AXE meta-refresh (WCAG 2.2.1 / 3.2.5): auto refresh -->
+<meta http-equiv="refresh" content="600">
+<title>SecureBank Portal</title>
+<style>
+  :root { --brand:#1d4ed8; }
+  body { font-family: system-ui, sans-serif; margin:0; line-height:1.4; }
+  /* MANUAL 1.3.4 Orientation: locks to landscape */
+  @media (orientation: portrait) { body { transform: rotate(90deg); transform-origin: left top; width:100vh; } }
+  /* MANUAL 2.4.7 Focus Visible: outlines removed globally */
+  *:focus { outline: none !important; }
+  /* MANUAL 2.4.11 Focus Not Obscured (WCAG 2.2): sticky bars cover focused elements */
+  .sticky-top { position:sticky; top:0; height:70px; background:#0b1f4d; color:#fff; z-index:50; padding:10px 20px; }
+  .sticky-bottom { position:fixed; bottom:0; left:0; right:0; height:90px; background:#fff; border-top:1px solid #999; z-index:50; padding:10px 20px; }
+  .content { padding:20px 20px 120px; }
+  /* AXE color-contrast */
+  .muted { color:#9ca3af; }
+  .btn { background:var(--brand); color:#93b4ff; border:0; padding:10px 18px; }
+  /* MANUAL 2.5.8 Target Size Minimum (WCAG 2.2): 12px targets */
+  .tiny-target { width:12px; height:12px; padding:0; border:1px solid #999; background:#eee; font-size:8px; }
+  /* MANUAL 1.4.1 link only distinguished by color */
+  p a { color:#2a2a2a; text-decoration:none; }
+  /* MANUAL 1.3.3 Sensory Characteristics */
+  .hint-right { float:right; width:200px; background:#fef3c7; padding:8px; }
+  .sr-fake { display:none; } /* AXE/MANUAL: hides text from SR and sighted alike */
+  .card-grid { display:grid; grid-template-columns:repeat(auto-fill,300px); gap:16px; }
+  .drag-item { padding:10px; background:#eef; margin:4px 0; cursor:grab; }
+  .carousel { overflow:hidden; width:300px; height:100px; background:#ddd; }
+  table.data { border-collapse:collapse; }
+  table.data td, table.data th { border:1px solid #bbb; padding:6px; }
+</style>
+</head>
+<body>
+
+<!-- MANUAL 2.4.1 Bypass Blocks: no skip link, no landmarks at all on the page except one <main> misplaced -->
+<div class="sticky-top">
+  <!-- AXE landmark-banner-is-top-level / MANUAL: role=banner used on a div nested in a section -->
+  <span style="font-size:22px;">SecureBank</span>
+  <!-- AXE aria-allowed-role: role=heading with no aria-level -->
+  <span role="heading">Account Overview</span>
+  <!-- AXE link-name + svg-img-alt -->
+  <a href="/help"><svg width="20" height="20" role="img"><circle cx="10" cy="10" r="8"/></svg></a>
+</div>
+
+<div class="content">
+
+  <!-- AXE empty-heading -->
+  <h1></h1>
+  <!-- AXE heading-order: h1 -> h4 -->
+  <h4>Your Accounts</h4>
+
+  <!-- AXE list / listitem: li outside ul, ul containing non-li -->
+  <ul>
+    <div>Checking ••••4821</div>
+    <li>Savings ••••1093</li>
+  </ul>
+  <li>Orphan list item</li>
+
+  <!-- AXE definition-list / dlitem -->
+  <dl>
+    <div>Balance</div>
+    <dd>$4,210.55</dd>
+  </dl>
+
+  <!-- AXE scrollable-region-focusable: scrollable area not keyboard reachable -->
+  <div style="height:60px; overflow:auto; border:1px solid #ccc;" >
+    <p>Recent activity line 1</p><p>Recent activity line 2</p><p>Recent activity line 3</p><p>Recent activity line 4</p>
+  </div>
+
+  <!-- MANUAL 1.3.3 Sensory Characteristics: instruction relies on position/color -->
+  <div class="hint-right">Click the green button on the right to continue.</div>
+  <button style="background:#22c55e;border:0;padding:8px;">Continue</button>
+
+  <!-- AXE aria-valid-attr / aria-allowed-attr / aria-roles -->
+  <div role="banana" aria-foo="bar">Invalid role and attribute</div>
+  <button aria-pressed="maybe" aria-checked="true">Toggle</button>
+  <input type="text" aria-labelledby="does-not-exist">
+  <!-- AXE aria-hidden-body style: hidden but focusable -->
+  <a href="#" style="position:absolute; left:-9999px;" aria-hidden="true">Hidden link</a>
+  <!-- AXE presentation-role-conflict: role=presentation on focusable -->
+  <button role="presentation">Presentational button</button>
+  <!-- AXE aria-text / label-content-name-mismatch (WCAG 2.5.3) -->
+  <button aria-label="Submit payment">Pay now</button>
+
+  <!-- AXE autocomplete-valid + MANUAL 3.3.8 Accessible Authentication (WCAG 2.2) -->
+  <h4>Sign in</h4>
+  <form action="#" onsubmit="return false;">
+    <label for="u">Username</label>
+    <input id="u" type="text" autocomplete="nope">
+    <label for="p">Password</label>
+    <!-- MANUAL 3.3.8: paste blocked, so password managers can't be used -->
+    <input id="p" type="password" onpaste="return false;" autocomplete="off">
+    <!-- MANUAL 3.3.8: cognitive test (puzzle) with no alternative -->
+    <p>Security check: what is 17 &times; 23 minus 4? <input type="text" aria-label="answer"></p>
+    <!-- MANUAL 3.3.7 Redundant Entry (WCAG 2.2): asks for info already provided -->
+    <label for="e1">Email</label><input id="e1" type="email">
+    <label for="e2">Re-enter the email you entered on the previous step</label><input id="e2" type="email">
+    <!-- AXE duplicate form label association + MANUAL 3.3.2 -->
+    <input type="text" title="">
+    <input type="submit" class="btn" value="Sign in">
+  </form>
+
+  <!-- MANUAL 2.5.7 Dragging Movements (WCAG 2.2): reorder only via drag, no single-pointer alternative -->
+  <h4>Reorder priorities</h4>
+  <div class="drag-item" draggable="true">1. Pay rent</div>
+  <div class="drag-item" draggable="true">2. Transfer to savings</div>
+  <div class="drag-item" draggable="true">3. Review statements</div>
+
+  <!-- MANUAL 2.5.8 Target Size -->
+  <p>Rate this page:
+    <button class="tiny-target">1</button><button class="tiny-target">2</button><button class="tiny-target">3</button>
+  </p>
+
+  <!-- MANUAL 2.5.4 Motion Actuation: shake-to-undo with no UI control -->
+  <script>window.addEventListener('devicemotion', function(e){ /* shake to undo last transfer */ });</script>
+
+  <!-- MANUAL 2.2.2 Pause, Stop, Hide: auto-rotating carousel, no pause control -->
+  <div class="carousel" id="car" aria-live="off">Offer 1: 2% cashback</div>
+  <script>
+    var offers=['Offer 1: 2% cashback','Offer 2: Free transfers','Offer 3: Low APR'],i=0;
+    setInterval(function(){i=(i+1)%3;document.getElementById('car').textContent=offers[i];},2500);
+  </script>
+
+  <!-- AXE td-headers-attr / th-has-data-cells / scope-attr-valid / table-duplicate-name -->
+  <h4>Transactions</h4>
+  <table class="data" summary="Transactions" >
+    <caption>Transactions</caption>
+    <tr><th scope="diagonal">Date</th><th></th><th headers="nonexistent">Amount</th></tr>
+    <tr><td headers="zzz">Sep 1</td><td>Coffee Shop</td><td>-$4.50</td></tr>
+    <tr><td colspan="2">Sep 2 — Payroll</td><td>+$2,100.00</td></tr>
+  </table>
+  <!-- MANUAL 1.3.1: layout table used for form alignment, presentational role missing -->
+  <table><tr><td>Name</td><td><input aria-label="name field"></td></tr></table>
+
+  <!-- AXE frame-title-unique / frame-focusable-content / iframe with tabindex=-1 -->
+  <iframe src="about:blank" title="Widget" tabindex="-1"></iframe>
+  <iframe src="about:blank" title="Widget"></iframe>
+
+  <!-- AXE svg-img-alt / MANUAL 1.1.1: complex chart as SVG with no text alternative -->
+  <svg width="240" height="100" role="img"><rect x="10" y="30" width="40" height="60" fill="#60a5fa"/><rect x="70" y="10" width="40" height="80" fill="#34d399"/></svg>
+
+  <!-- AXE area-alt / image-map -->
+  <img src="map.png" usemap="#m" alt="Branch map">
+  <map name="m"><area shape="rect" coords="0,0,50,50" href="/a"></map>
+
+  <!-- AXE object-alt, video-caption, audio-caption, no-autoplay-audio (WCAG 1.2.x, 1.4.2) -->
+  <object data="promo.swf"></object>
+  <video autoplay muted loop width="240"><source src="promo.mp4"></video>
+  <audio controls autoplay><source src="jingle.mp3"></audio>
+  <!-- MANUAL 1.2.5 Audio Description: prerecorded video with no AD track/transcript -->
+
+  <!-- MANUAL 2.4.4/2.4.9 Link Purpose: ambiguous and same text different targets -->
+  <p>Statements <a href="/statements/2025">click here</a> | Tax docs <a href="/tax">click here</a> | Forms <a href="/forms">click here</a></p>
+  <p>Read our <a href="#">terms</a> and <a href="#" target="_blank">privacy policy</a>
+     <!-- MANUAL 3.2.5 / G201: opens new window with no warning --></p>
+
+  <!-- MANUAL 3.2.6 Consistent Help (WCAG 2.2): help link location differs from other pages; here it's buried -->
+  <p style="text-align:right;font-size:10px;" class="muted">Need help? Call 1-800-000-0000</p>
+
+  <!-- MANUAL 3.1.2 Language of Parts: foreign phrase without lang -->
+  <p>Thank you for banking with us. <em>Merci de votre confiance.</em></p>
+  <!-- MANUAL 3.1.5 Reading Level / 3.1.4 Abbreviations: unexpanded jargon -->
+  <p>Your APY on the CD is subject to Reg D limits per the T&amp;C ToS addendum.</p>
+
+  <!-- AXE nested-interactive, aria-hidden-focus, button in link, input inside label, etc. -->
+  <a href="/x"><button>Nested interactive</button></a>
+  <div aria-hidden="true"><input type="text" value="hidden but focusable"></div>
+
+  <!-- AXE duplicate-id-aria + duplicate-id-active -->
+  <button id="dup" aria-describedby="dup">A</button>
+  <button id="dup">B</button>
+
+  <!-- MANUAL 4.1.3 Status Messages: form success shown by moving text, no role=status -->
+  <button class="btn" onclick="document.getElementById('res').textContent='Transfer complete'">Transfer $100</button>
+  <div id="res"></div>
+
+  <!-- MANUAL 1.4.10 Reflow + 1.4.12 Text Spacing: fixed-width card grid + clipped text -->
+  <div class="card-grid" style="width:1000px;">
+    <div style="height:40px;overflow:hidden;line-height:20px;">This card's long description gets clipped as soon as text spacing is increased by a user stylesheet.</div>
+    <div style="height:40px;overflow:hidden;line-height:20px;">Another card with fixed height and hidden overflow, so content is lost on zoom.</div>
+  </div>
+
+  <!-- MANUAL 1.4.3: text over image, opacity-reduced text -->
+  <div style="background:url(bg.jpg) #7aa; padding:12px;"><span style="color:#fff;opacity:.7;">Overlay text on photo</span></div>
+
+  <!-- MANUAL 1.4.5 Images of Text -->
+  <img src="promo-text-banner.png" alt="Great rates">
+
+  <!-- MANUAL 2.1.4 Character Key Shortcuts: single-key shortcut with no way to disable -->
+  <script>document.addEventListener('keydown',function(e){ if(e.key==='t'){ location.hash='#transfer'; } });</script>
+
+  <!-- MANUAL 2.2.1 Timing Adjustable: silent auto-logout, no warning -->
+  <script>setTimeout(function(){ location.href='/logout'; }, 120000);</script>
+
+  <!-- MANUAL 3.2.2 On Input: select changes context immediately -->
+  <label for="lang">Language</label>
+  <select id="lang" onchange="location.hash=this.value"><option value="en">English</option><option value="es">Español</option></select>
+
+</div>
+
+<!-- MANUAL 2.4.11 target: this fixed bar hides focused elements while tabbing -->
+<div class="sticky-bottom">
+  <button class="btn">Chat with us</button>
+  <span class="sr-fake">Chat is available 24/7</span>
+</div>
+
+<!-- AXE region: content outside landmarks; MANUAL 1.3.1: <main> appears after everything, containing only trivia -->
+<main><p>Footer note.</p></main>
+<main><p>Second main landmark (AXE landmark-no-duplicate-main).</p></main>
+
+</body>
+</html>
