@@ -1,0 +1,1 @@
+﻿{"finding_id": "TEST-2", "rule_id": "image-alt", "wcag": {"success_criterion": "1.1.1", "level": "A", "principle": "Perceivable", "title": "Non-text Content"}, "status": "confirmed", "detection_method": "axe-core", "url": "http://localhost:8080/index.html", "element": {"selector": ".logo-img", "html": "<img src=\"logo.png\" class=\"logo-img\">"}}

@@ -17,7 +17,7 @@ jobs:
       max-parallel: 1
       matrix:
         page:
-          - a11y-test-page-7-wcag22-ultimate.html
+          - index.html
     
     steps:
       - name: Checkout code
@@ -122,9 +122,20 @@ jobs:
                   
                   # Only escalate genuine manual review requirements
                   if status == 'MANUAL_REVIEW' or status == 'FAILED':
-                      notes = res.get('manual_review_notes', '')
-                      if 'FALSE POSITIVE' in notes or 'LLM planning unavailable' in notes:
-                          continue # Filter out False Positives and rate-limit drops
+                      notes = res.get('manual_review_notes', '') or ''
+                      # Filter out false positives, rate-limit drops, and duplicates
+                      if 'FALSE POSITIVE' in notes:
+                          continue
+                      if 'LLM planning unavailable' in notes:
+                          continue
+                      if 'DUPLICATE SKIPPED' in notes:
+                          continue
+                      
+                      # Build a clean, meaningful AI Notes string
+                      if notes and notes.strip():
+                          ai_notes = notes[:300].replace('|', '-').replace('\n', ' ')
+                      else:
+                          ai_notes = 'Requires human review — automated fix not safe for this rule.'
                       
                       # Extract the original finding details
                       finding_file = res_file.replace('result_', '')
@@ -138,13 +149,13 @@ jobs:
                       element = d.get('element', {})
                       html = element.get('html', 'N/A')
                       if len(html) > 50: html = html[:47] + '...'
-                      html = html.replace('|', '\|').replace('\n', ' ')
+                      html = html.replace('`', "'").replace('|', '-').replace('\n', ' ')
                       
                       selector = element.get('selector', 'N/A')
                       if isinstance(selector, list): selector = selector[0] if selector else 'N/A'
-                      selector = str(selector).replace('|', '\|')
+                      selector = str(selector).replace('|', '-')
                       
-                      manual.append((fid, rule, sc, desc, html, selector, notes[:200]))
+                      manual.append((fid, rule, sc, desc, html, selector, ai_notes))
               except Exception:
                   pass
 

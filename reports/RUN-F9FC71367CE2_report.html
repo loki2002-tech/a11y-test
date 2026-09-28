@@ -1,0 +1,2305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Accessibility Report — http://localhost:8080/a11y-test-page-4-checkout.html</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --bg: #0a0f1a; --surface: #111827; --surface2: #1f2937; --border: #64748b; --text: #f9fafb; --text-muted: #cbd5e1; --accent: #fca5a5; --accent2: #f97316; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding-bottom: 80px; }
+    
+    /* Hero */
+    .hero { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%); padding: 60px 20px 40px; text-align: center; border-bottom: 1px solid var(--border); }
+    .hero h1 { font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, #f8fafc 0%, #818cf8 50%, #f8fafc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 12px; letter-spacing: -1px; }
+    .hero .subtitle { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 20px; }
+    .hero .subtitle span { background: rgba(255,255,255,0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.08); color: #cbd5e1; font-size: 0.85rem; font-weight: 500; padding: 6px 14px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 6px; }
+    .hero .subtitle span b { color: #e2e8f0; font-weight: 600; }
+    
+    .container { max-width: 1400px; margin: -20px auto 40px; padding: 0 20px; position: relative; z-index: 10; }
+    
+    /* Stats as Filters */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: transform 0.2s, border-color 0.2s, background 0.2s; user-select: none; }
+    .stat:hover { transform: translateY(-3px); border-color: #94a3b8; }
+    .stat.active-filter { background: #1e293b; border-color: #818cf8; box-shadow: 0 0 15px rgba(129, 140, 248, 0.2); }
+    .stat .number { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; }
+    .stat .label { color: #cbd5e1; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+    /* Dropdown Filters */
+    .filter-bar { display: flex; gap: 16px; margin-bottom: 30px; flex-wrap: wrap; background: var(--surface); padding: 16px; border-radius: 12px; border: 1px solid var(--border); }
+    .filter-bar select { background: var(--surface2); color: #fff; border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; font-family: inherit; font-size: 0.9rem; outline: none; cursor: pointer; flex: 1; min-width: 200px; }
+    .filter-bar select:focus { border-color: #818cf8; }
+    .filter-status-text { width: 100%; color: #94a3b8; font-size: 0.9rem; margin-top: 8px; font-weight: 500; display: none; }
+
+    /* Cards */
+    .violations-list { display: flex; flex-direction: column; gap: 24px; }
+    .violation-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; display: grid; grid-template-columns: 400px 1fr; align-items: stretch; transition: display 0.3s; }
+    @media (max-width: 1024px) { .violation-card { grid-template-columns: 1fr; } }
+    
+    .card-screenshot { background: #18212f; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; border-right: 1px solid var(--border); overflow: hidden; position: relative; }
+    .screenshot-container { position: relative; max-width: 100%; display: inline-block; cursor: zoom-in; }
+    .card-screenshot img { max-width: 100%; max-height: 500px; object-fit: contain; border-radius: 8px; border: 1px solid #334155; box-shadow: 0 8px 24px rgba(0,0,0,0.4); display: block; transition: transform 0.2s; }
+    .card-screenshot img:hover { transform: scale(1.02); }
+    
+    /* Fullscreen Modal */
+    .lightbox {
+      display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.9); overflow: auto; align-items: center; justify-content: center;
+    }
+    .lightbox.active { display: flex; flex-direction: column; }
+    .lightbox-content-wrapper { position: relative; max-width: 95%; max-height: 90vh; }
+    .lightbox-img { max-width: 100%; max-height: 90vh; object-fit: contain; box-shadow: 0 0 40px rgba(0,0,0,0.8); border: 1px solid #334155; }
+    .lightbox-close {
+      position: absolute; top: 20px; right: 30px; color: #fff; font-size: 40px; font-weight: bold; cursor: pointer; transition: color 0.2s;
+    }
+    .lightbox-close:hover { color: #818cf8; }
+
+    .locator-box {
+      position: absolute; display: none; pointer-events: none;
+      box-shadow: 0 0 0 3px #b82dd2, 0 0 10px 3px rgba(184,45,210,0.8);
+      border: 2px solid #fff; z-index: 10;
+      border-radius: 2px;
+    }
+    .locator-tooltip {
+      position: absolute; top: 100%; left: -2px; margin-top: 8px;
+      background: #fff; color: #111827; border: 1px solid #111827;
+      padding: 6px 10px; border-radius: 4px; font-size: 0.75rem; font-family: 'Inter', sans-serif;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3); width: max-content; min-width: 180px; z-index: 20;
+    }
+    .locator-tooltip b { color: #b82dd2; font-family: monospace; font-size: 0.8rem; }
+    .locator-tooltip .tt-row { display: flex; justify-content: space-between; margin-top: 4px; color: #4b5563; }
+    .locator-tooltip .tt-row span:first-child { color: #6b7280; }
+    .locator-tooltip::before {
+      content: ''; position: absolute; top: -5px; left: 10px;
+      width: 8px; height: 8px; background: #fff; border-left: 1px solid #111827; border-top: 1px solid #111827;
+      transform: rotate(45deg);
+    }
+    
+    .no-screenshot { color: #64748b; font-style: italic; font-size: 0.9rem; }
+    
+    .card-details { padding: 24px 32px; display: flex; flex-direction: column; gap: 16px; }
+    .badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .severity-badge { padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid; }
+    
+    .badge-critical { background: rgba(220, 38, 38, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+    .badge-serious { background: rgba(234, 88, 12, 0.15); color: #f97316; border-color: rgba(249, 115, 22, 0.3); }
+    .badge-moderate { background: rgba(202, 138, 4, 0.15); color: #eab308; border-color: rgba(234, 179, 8, 0.3); }
+    .badge-minor { background: rgba(37, 99, 235, 0.15); color: #60a5fa; border-color: rgba(96, 165, 250, 0.3); }
+    .badge-wcag { background: #1e293b; border-color: #475569; color: #cbd5e1; }
+    
+    .violation-title { font-size: 1.25rem; font-weight: 700; line-height: 1.3; color: #f8fafc; }
+    
+    .explanation-block { background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px; border-left: 4px solid #818cf8; }
+    .explanation-block h4 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px; }
+    .explanation-block p { font-size: 0.95rem; color: #e2e8f0; line-height: 1.6; }
+    .explanation-block p:not(:last-child) { margin-bottom: 12px; }
+
+    /* Buttons block */
+    .button-group { display: flex; gap: 8px; margin-top: 12px; }
+    
+    .xpath-container { display: flex; align-items: center; gap: 12px; background: #0f172a; padding: 10px 16px; border-radius: 8px; border: 1px solid #334155; }
+    .xpath-container span { color: #94a3b8; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; }
+    .xpath-container code { color: #a78bfa; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.85rem; word-break: break-all; flex: 1; }
+    .btn-secondary { background: #334155; color: #f8fafc; border: 1px solid #475569; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 700; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
+    .btn-secondary:hover { background: #475569; }
+    .copy-btn { background: #3b82f6; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 700; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
+    .copy-btn:hover { background: #2563eb; }
+    .btn-locate { background: #818cf8; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 700; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
+    .btn-locate:hover { background: #6366f1; }
+      .test-plan-section { background: var(--surface); border: 1px solid #334155; border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
+    .test-plan-section summary { padding: 16px 20px; cursor: pointer; display: flex; align-items: center; gap: 8px; user-select: none; }
+    .test-plan-body { padding: 0 20px 20px; }
+      .test-plan-steps { display: flex; flex-direction: column; gap: 10px; }
+      .test-plan-step { display: flex; gap: 14px; align-items: flex-start; background: var(--surface2); border-radius: 8px; padding: 12px 16px; border-left: 3px solid #818cf8; }
+      .step-number { font-size: 1.2rem; font-weight: 800; color: #818cf8; min-width: 28px; }
+      .step-body { flex: 1; }
+      .step-action { display: inline-block; background: #1e1b4b; color: #818cf8; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; padding: 2px 8px; border-radius: 4px; margin-bottom: 4px; }
+      .step-target { color: #e2e8f0; font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; font-family: 'Courier New', monospace; }
+      .step-reason { color: #94a3b8; font-size: 0.85rem; margin-bottom: 8px; }
+      .step-wcag { display: flex; gap: 6px; flex-wrap: wrap; }
+    .copy-btn.copied { background: #10b981; }
+
+    /* AI Remediation */
+    .fix-block { background: rgba(16,185,129,0.05); border-radius: 12px; padding: 20px; border: 1px solid rgba(16,185,129,0.2); }
+    .fix-block h4 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #10b981; margin-bottom: 8px; font-weight: 800; }
+    
+    .code-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .code-tab { background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 6px 14px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+    .code-tab.active { background: #10b981; border-color: #10b981; color: #022c22; }
+    .code-tab:hover:not(.active) { background: #334155; color: #fff; }
+    
+    /* Scrollable Code Blocks to prevent huge vertical stretching */
+    .code-block { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; overflow-x: auto; max-height: 250px; overflow-y: auto; }
+    .code-block pre { color: #e2e8f0; font-size: 0.85rem; line-height: 1.5; font-family: ui-monospace, SFMono-Regular, monospace; white-space: pre-wrap; word-break: break-word; margin: 0; }
+    
+    /* Scrollbar styling for code blocks */
+    .code-block::-webkit-scrollbar { width: 8px; height: 8px; }
+    .code-block::-webkit-scrollbar-track { background: #0f172a; border-radius: 4px; }
+    .code-block::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    .code-block::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+    .wcag-ref { font-size: 0.8rem; color: #94a3b8; font-weight: 600; margin-top: auto; padding-top: 16px; border-top: 1px dotted var(--border); }
+    
+    /* Scroll to Top */
+    .scroll-top { position: fixed; bottom: 30px; right: 30px; background: #818cf8; color: #fff; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.2s; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; font-size: 1.5rem; }
+    .scroll-top.visible { opacity: 1; pointer-events: auto; }
+    .scroll-top:hover { transform: translateY(-3px); background: #6366f1; }
+
+    .warning-card { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px; margin-top: 16px; margin-bottom: 16px; }
+    .warning-card h4 { color: #b45309; margin: 0 0 8px 0; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; }
+    .warning-card ul { margin: 0; padding-left: 20px; color: #92400e; font-size: 0.9rem; }
+    .footer { text-align: center; padding: 40px; color: #64748b; font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 60px; }
+  </style>
+  <script>
+    // Tab switching for code blocks
+    function switchTab(btn, showId, hideId) {
+      const parent = btn.closest('.fix-block');
+      parent.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      
+      const showEl = parent.querySelector('#' + showId);
+      const hideEl = parent.querySelector('#' + hideId);
+      if(showEl) showEl.style.display = 'block';
+      if(hideEl) hideEl.style.display = 'none';
+    }
+
+    // Copy to clipboard
+    
+    function locateElement(btn) {
+      const container = btn.closest('.card-screenshot').querySelector('.screenshot-container');
+      const img = container.querySelector('.full-page-img');
+      const box = container.querySelector('.locator-box');
+      
+      if (!img || !box) return;
+      
+      if (img.naturalWidth === 0) {
+          img.onload = () => locateElement(btn);
+          return;
+      }
+      
+      const scaleX = img.clientWidth / img.naturalWidth;
+      const scaleY = scaleX;
+      
+      const origX = parseFloat(box.dataset.x);
+      const origY = parseFloat(box.dataset.y);
+      const origW = parseFloat(box.dataset.w);
+      const origH = parseFloat(box.dataset.h);
+      
+      box.style.left = (origX * scaleX) + 'px';
+      box.style.top = (origY * scaleY) + 'px';
+      box.style.width = (origW * scaleX) + 'px';
+      box.style.height = (origH * scaleY) + 'px';
+      
+      if (box.style.display === 'block') {
+          box.style.display = 'none';
+      } else {
+          box.style.display = 'block';
+          // Ensure container is scrolled if needed
+          const card = btn.closest('.card-screenshot');
+          if (card) {
+            card.scrollTop = (origY * scaleY) - 50;
+          }
+      }
+    }
+
+    function openLightbox(imgElement) {
+      const container = imgElement.closest('.screenshot-container');
+      const box = container.querySelector('.locator-box');
+      
+      const lightbox = document.getElementById('lightbox');
+      const lbImg = document.getElementById('lb-img');
+      const lbBox = document.getElementById('lb-box');
+      const lbTooltip = document.getElementById('lb-tooltip');
+      
+      lbImg.src = imgElement.src;
+      
+      lightbox.classList.add('active');
+      
+      lbImg.onload = () => {
+        if (!box) {
+          lbBox.style.display = 'none';
+          return;
+        }
+        
+        const scaleX = lbImg.clientWidth / lbImg.naturalWidth;
+        const scaleY = scaleX;
+        
+        const origX = parseFloat(box.dataset.x);
+        const origY = parseFloat(box.dataset.y);
+        const origW = parseFloat(box.dataset.w);
+        const origH = parseFloat(box.dataset.h);
+        
+        lbBox.style.left = (origX * scaleX) + 'px';
+        lbBox.style.top = (origY * scaleY) + 'px';
+        lbBox.style.width = (origW * scaleX) + 'px';
+        lbBox.style.height = (origH * scaleY) + 'px';
+        lbBox.style.display = 'block';
+        
+        // Copy tooltip content
+        const tooltip = box.querySelector('.locator-tooltip');
+        if (tooltip && lbTooltip) {
+          lbTooltip.innerHTML = tooltip.innerHTML;
+        }
+      };
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('active');
+    }
+
+    function shareIssue(btn) {
+      const card = btn.closest('.violation-card');
+      const title = card.querySelector('.violation-title').innerText;
+      const wcag = card.querySelector('.badge-wcag').innerText;
+      const selector = btn.getAttribute('data-selector');
+      const text = `Accessibility Issue: ${title}
+WCAG Rule: ${wcag}
+Selector: ${selector}
+
+Please review the report for AI remediation suggestions.`;
+      
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!`;
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    function copySelector(btn) {
+      const selector = btn.getAttribute('data-selector');
+      navigator.clipboard.writeText(selector).then(() => {
+        const originalText = btn.innerText;
+        btn.innerText = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
+    // Filtering Logic
+    let currentStatusFilter = 'all';
+    
+    function setStatusFilter(status, cardElement) {
+      // Toggle logic
+      if (currentStatusFilter === status) {
+        currentStatusFilter = 'all';
+        document.querySelectorAll('.stat').forEach(el => el.classList.remove('active-filter'));
+      } else {
+        currentStatusFilter = status;
+        document.querySelectorAll('.stat').forEach(el => el.classList.remove('active-filter'));
+        cardElement.classList.add('active-filter');
+      }
+      applyFilters();
+    }
+
+    function applyFilters() {
+      const wcagFilter = document.getElementById('wcagFilter').value;
+      const severityFilter = document.getElementById('severityFilter').value;
+      const cards = document.querySelectorAll('.violation-card');
+      let visibleCount = 0;
+
+      cards.forEach(card => {
+        const status = card.getAttribute('data-status');
+        const wcag = card.getAttribute('data-wcag');
+        const severity = card.getAttribute('data-severity');
+
+        const matchStatus = (currentStatusFilter === 'all' || status === currentStatusFilter);
+        const matchWcag = (wcagFilter === 'all' || wcag === wcagFilter);
+        const matchSeverity = (severityFilter === 'all' || severity === severityFilter);
+
+        if (matchStatus && matchWcag && matchSeverity) {
+          card.style.display = 'grid';
+          visibleCount++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      const filterMsg = document.getElementById('filter-msg');
+      filterMsg.innerText = `Showing ${visibleCount} of ${cards.length} issues.`;
+      filterMsg.style.display = 'block';
+    }
+
+    // Scroll to Top
+    window.addEventListener('scroll', () => {
+      const btn = document.getElementById('scrollTopBtn');
+      if (window.scrollY > 300) {
+        btn.classList.add('visible');
+      } else {
+        btn.classList.remove('visible');
+      }
+    });
+
+    function scrollToTop() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  </script>
+</head>
+<body>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<header class="hero">
+  <h1>AI Accessibility Scanner</h1>
+  <div class="subtitle">
+    <span><b>URL:</b> http://localhost:8080/a11y-test-page-4-checkout.html</span>
+    <span><b>Browser:</b> chromium</span>
+    <span><b>Resolution:</b> 1280x720</span>
+    <span><b>Run ID:</b> RUN-F9FC71367CE2</span>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- Interactive Stat Filters -->
+  <div class="stats-grid">
+    <div class="stat" onclick="setStatusFilter('confirmed', this)">
+      <div class="number" style="color:#ef4444;">20</div>
+      <div class="label">Confirmed Bugs</div>
+    </div>
+    <div class="stat" onclick="setStatusFilter('likely', this)">
+      <div class="number" style="color:#f97316;">0</div>
+      <div class="label">Likely Bugs</div>
+    </div>
+    <div class="stat" onclick="setStatusFilter('requires_manual_review', this)">
+      <div class="number" style="color:#eab308;">0</div>
+      <div class="label">Needs Review</div>
+    </div>
+    <div class="stat" onclick="setStatusFilter('pass', this)">
+      <div class="number" style="color:#10b981;">0</div>
+      <div class="label">Passed Checks</div>
+    </div>
+  </div>
+
+  <!-- AI Test Plan (only shown when agentic scan was run) -->
+  
+
+  <!-- Dropdown Filters -->
+  <div class="filter-bar">
+    <select id="wcagFilter" onchange="applyFilters()">
+      <option value="all">All WCAG Criteria</option>
+      
+      <option value="1.3.1">WCAG 1.3.1</option>
+      
+      <option value="1.3.5">WCAG 1.3.5</option>
+      
+      <option value="1.4.3">WCAG 1.4.3</option>
+      
+      <option value="2.5.8">WCAG 2.5.8</option>
+      
+      <option value="4.1.2">WCAG 4.1.2</option>
+      
+      <option value="4.1.3">WCAG 4.1.3</option>
+      
+    </select>
+    
+    <select id="severityFilter" onchange="applyFilters()">
+      <option value="all">All Severities</option>
+      <option value="critical">Critical</option>
+      <option value="serious">Serious</option>
+      <option value="moderate">Moderate</option>
+      <option value="minor">Minor</option>
+    </select>
+    
+    <div id="filter-msg" class="filter-status-text"></div>
+  </div>
+
+  <div class="violations-list">
+    
+    
+
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="4.1.2" 
+         data-severity="critical">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="20" 
+                     data-y="834.90625" 
+                     data-w="1240" 
+                     data-h="38">
+                  <div class="locator-tooltip">.accordion-header<br>Dimensions: 1240x38</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-critical">CRITICAL</span>
+          <span class="severity-badge badge-wcag">4.1.2 NAME, ROLE, VALUE</span>
+        </div>
+        
+        <div class="violation-title">Elements must only use supported ARIA attributes</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix all of the following:
+  ARIA attribute is not allowed: aria-expanded=&#34;false&#34;</p>
+          <p><strong>Requirement:</strong> Ensures an element&#39;s role supports its ARIA attributes</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>.accordion-header</code>
+          <button class="copy-btn" data-selector=".accordion-header" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#name-role-value" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.5" 
+         data-severity="serious">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="38" 
+                     data-y="437.90625" 
+                     data-w="266" 
+                     data-h="31">
+                  <div class="locator-tooltip">#city<br>Dimensions: 266x31</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-serious">SERIOUS</span>
+          <span class="severity-badge badge-wcag">1.3.5 IDENTIFY INPUT PURPOSE</span>
+        </div>
+        
+        <div class="violation-title">autocomplete attribute must be used correctly</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix all of the following:
+  the autocomplete attribute is incorrectly formatted</p>
+          <p><strong>Requirement:</strong> Ensure the autocomplete attribute is correct and suitable for the form field</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>#city</code>
+          <button class="copy-btn" data-selector="#city" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level AA)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#identify-input-purpose" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="4.1.2" 
+         data-severity="critical">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="20" 
+                     data-y="1033.90625" 
+                     data-w="80" 
+                     data-h="47">
+                  <div class="locator-tooltip">button[type=&#34;submit&#34;]<br>Dimensions: 80x47</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-critical">CRITICAL</span>
+          <span class="severity-badge badge-wcag">4.1.2 NAME, ROLE, VALUE</span>
+        </div>
+        
+        <div class="violation-title">Buttons must have discernible text</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Element does not have inner text that is visible to screen readers
+  aria-label attribute does not exist or is empty
+  aria-labelledby attribute does not exist, references elements that do not exist or references elements that are empty
+  Element has no title attribute
+  Element&#39;s default semantics were not overridden with role=&#34;none&#34; or role=&#34;presentation&#34;</p>
+          <p><strong>Requirement:</strong> Ensures buttons have discernible text</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>button[type=&#34;submit&#34;]</code>
+          <button class="copy-btn" data-selector="button[type=&#34;submit&#34;]" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#name-role-value" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.4.3" 
+         data-severity="serious">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="20" 
+                     data-y="20" 
+                     data-w="413.328125" 
+                     data-h="18">
+                  <div class="locator-tooltip">.done<br>Dimensions: 413.0x18</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-serious">SERIOUS</span>
+          <span class="severity-badge badge-wcag">1.4.3 CONTRAST (MINIMUM)</span>
+        </div>
+        
+        <div class="violation-title">Elements must meet minimum color contrast ratio thresholds</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Element has insufficient color contrast of 2.77 (foreground color: #4caf50, background color: #ffffff, font size: 12.0pt (16px), font weight: normal). Expected contrast ratio of 4.5:1</p>
+          <p><strong>Requirement:</strong> Ensures the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>.done</code>
+          <button class="copy-btn" data-selector=".done" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level AA)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#contrast-minimum" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.4.3" 
+         data-severity="serious">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="846.671875" 
+                     data-y="20" 
+                     data-w="413.328125" 
+                     data-h="18">
+                  <div class="locator-tooltip">.step:nth-child(3)<br>Dimensions: 413.0x18</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-serious">SERIOUS</span>
+          <span class="severity-badge badge-wcag">1.4.3 CONTRAST (MINIMUM)</span>
+        </div>
+        
+        <div class="violation-title">Elements must meet minimum color contrast ratio thresholds</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Element has insufficient color contrast of 1.91 (foreground color: #bbbbbb, background color: #ffffff, font size: 12.0pt (16px), font weight: normal). Expected contrast ratio of 4.5:1</p>
+          <p><strong>Requirement:</strong> Ensures the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>.step:nth-child(3)</code>
+          <button class="copy-btn" data-selector=".step:nth-child(3)" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level AA)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#contrast-minimum" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.4.3" 
+         data-severity="serious">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="35" 
+                     data-y="975.90625" 
+                     data-w="300" 
+                     data-h="23">
+                  <div class="locator-tooltip">p:nth-child(3)<br>Dimensions: 300x23</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-serious">SERIOUS</span>
+          <span class="severity-badge badge-wcag">1.4.3 CONTRAST (MINIMUM)</span>
+        </div>
+        
+        <div class="violation-title">Elements must meet minimum color contrast ratio thresholds</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Element has insufficient color contrast of 3.83 (foreground color: #ff0000, background color: #fafafa, font size: 15.0pt (20px), font weight: normal). Expected contrast ratio of 4.5:1</p>
+          <p><strong>Requirement:</strong> Ensures the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>p:nth-child(3)</code>
+          <button class="copy-btn" data-selector="p:nth-child(3)" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level AA)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#contrast-minimum" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="0" 
+                     data-y="0" 
+                     data-w="1280" 
+                     data-h="1100.90625">
+                  <div class="locator-tooltip">html<br>Dimensions: 1280x1101.0</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">Document should have one main landmark</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix all of the following:
+  Document does not have a main landmark</p>
+          <p><strong>Requirement:</strong> Ensures the document has a main landmark</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>html</code>
+          <button class="copy-btn" data-selector="html" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="4.1.2" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="0" 
+                     data-y="0" 
+                     data-w="1280" 
+                     data-h="1100.90625">
+                  <div class="locator-tooltip">html<br>Dimensions: 1280x1101.0</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">4.1.2 NAME, ROLE, VALUE</span>
+        </div>
+        
+        <div class="violation-title">Page should contain a level-one heading</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix all of the following:
+  Page must have a level-one heading</p>
+          <p><strong>Requirement:</strong> Ensure that the page, or at least one of its frames contains a level-one heading</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>html</code>
+          <button class="copy-btn" data-selector="html" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#name-role-value" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="20" 
+                     data-y="20" 
+                     data-w="1240" 
+                     data-h="18">
+                  <div class="locator-tooltip">.steps<br>Dimensions: 1240x18</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">All page content should be contained by landmarks</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Some page content is not contained by landmarks</p>
+          <p><strong>Requirement:</strong> Ensures all page content is contained by landmarks</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>.steps</code>
+          <button class="copy-btn" data-selector=".steps" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="20" 
+                     data-y="68" 
+                     data-w="1240" 
+                     data-h="28">
+                  <div class="locator-tooltip">h2<br>Dimensions: 1240x28</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">All page content should be contained by landmarks</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Some page content is not contained by landmarks</p>
+          <p><strong>Requirement:</strong> Ensures all page content is contained by landmarks</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>h2</code>
+          <button class="copy-btn" data-selector="h2" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="38" 
+                     data-y="115.90625" 
+                     data-w="59.140625" 
+                     data-h="18">
+                  <div class="locator-tooltip">fieldset:nth-child(1) &gt; legend<br>Dimensions: 59.0x18</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">All page content should be contained by landmarks</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Some page content is not contained by landmarks</p>
+          <p><strong>Requirement:</strong> Ensures all page content is contained by landmarks</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>fieldset:nth-child(1) &gt; legend</code>
+          <button class="copy-btn" data-selector="fieldset:nth-child(1) &gt; legend" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="38" 
+                     data-y="148.90625" 
+                     data-w="50.6875" 
+                     data-h="17">
+                  <div class="locator-tooltip">label[for=&#34;email&#34;]<br>Dimensions: 51.0x17</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">All page content should be contained by landmarks</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Some page content is not contained by landmarks</p>
+          <p><strong>Requirement:</strong> Ensures all page content is contained by landmarks</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>label[for=&#34;email&#34;]</code>
+          <button class="copy-btn" data-selector="label[for=&#34;email&#34;]" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="38" 
+                     data-y="170.90625" 
+                     data-w="266" 
+                     data-h="31">
+                  <div class="locator-tooltip">#email<br>Dimensions: 266x31</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">All page content should be contained by landmarks</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Some page content is not contained by landmarks</p>
+          <p><strong>Requirement:</strong> Ensures all page content is contained by landmarks</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>#email</code>
+          <button class="copy-btn" data-selector="#email" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="22" 
+                     data-y="249.90625" 
+                     data-w="1236" 
+                     data-h="352">
+                  <div class="locator-tooltip">fieldset:nth-child(2)<br>Dimensions: 1236x352</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">All page content should be contained by landmarks</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Some page content is not contained by landmarks</p>
+          <p><strong>Requirement:</strong> Ensures all page content is contained by landmarks</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>fieldset:nth-child(2)</code>
+          <button class="copy-btn" data-selector="fieldset:nth-child(2)" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="20" 
+                     data-y="834.90625" 
+                     data-w="1240" 
+                     data-h="38">
+                  <div class="locator-tooltip">.accordion-header<br>Dimensions: 1240x38</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">All page content should be contained by landmarks</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Some page content is not contained by landmarks</p>
+          <p><strong>Requirement:</strong> Ensures all page content is contained by landmarks</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>.accordion-header</code>
+          <button class="copy-btn" data-selector=".accordion-header" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.3.1" 
+         data-severity="moderate">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="20" 
+                     data-y="872.90625" 
+                     data-w="330" 
+                     data-h="161">
+                  <div class="locator-tooltip">.price-summary<br>Dimensions: 330x161</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-moderate">MODERATE</span>
+          <span class="severity-badge badge-wcag">1.3.1 INFO AND RELATIONSHIPS</span>
+        </div>
+        
+        <div class="violation-title">All page content should be contained by landmarks</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Some page content is not contained by landmarks</p>
+          <p><strong>Requirement:</strong> Ensures all page content is contained by landmarks</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>.price-summary</code>
+          <button class="copy-btn" data-selector=".price-summary" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level A)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#info-and-relationships" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="2.5.8" 
+         data-severity="serious">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="43" 
+                     data-y="548.90625" 
+                     data-w="13" 
+                     data-h="13">
+                  <div class="locator-tooltip">#std<br>Dimensions: 13x13</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-serious">SERIOUS</span>
+          <span class="severity-badge badge-wcag">2.5.8 TARGET SIZE (MINIMUM)</span>
+        </div>
+        
+        <div class="violation-title">All touch targets must be 24px large, or leave sufficient space</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Target has insufficient size (13px by 13px, should be at least 24px by 24px)
+  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 16px instead of at least 24px.</p>
+          <p><strong>Requirement:</strong> Ensure touch target have sufficient size and space</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>#std</code>
+          <button class="copy-btn" data-selector="#std" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level AA)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#target-size-minimum" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="2.5.8" 
+         data-severity="serious">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-42D6EBDDFEA6F433" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="43" 
+                     data-y="568.90625" 
+                     data-w="13" 
+                     data-h="13">
+                  <div class="locator-tooltip">#exp<br>Dimensions: 13x13</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-serious">SERIOUS</span>
+          <span class="severity-badge badge-wcag">2.5.8 TARGET SIZE (MINIMUM)</span>
+        </div>
+        
+        <div class="violation-title">All touch targets must be 24px large, or leave sufficient space</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Target has insufficient size (13px by 13px, should be at least 24px by 24px)
+  Target has insufficient space to its closest neighbors. Safe clickable space has a diameter of 16px instead of at least 24px.</p>
+          <p><strong>Requirement:</strong> Ensure touch target have sufficient size and space</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>#exp</code>
+          <button class="copy-btn" data-selector="#exp" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level AA)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#target-size-minimum" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="1.4.3" 
+         data-severity="serious">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+        
+        
+        <div class="no-screenshot">Screenshot not captured</div>
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-serious">SERIOUS</span>
+          <span class="severity-badge badge-wcag">1.4.3 CONTRAST (MINIMUM)</span>
+        </div>
+        
+        <div class="violation-title">Elements must meet minimum color contrast ratio thresholds</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Fix any of the following:
+  Element has insufficient color contrast of 4.22 (foreground color: #e53935, background color: #ffffff, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1</p>
+          <p><strong>Requirement:</strong> Ensures the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>#email-err</code>
+          <button class="copy-btn" data-selector="#email-err" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level AA)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#contrast-minimum" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+    
+    
+    
+    
+      
+      
+    
+
+    <div class="violation-card" 
+         data-status="confirmed" 
+         data-wcag="4.1.3" 
+         data-severity="critical">
+      
+      <!-- Screenshot -->
+      <div class="card-screenshot">
+        
+        
+          
+            
+              
+              <div class="screenshot-container">
+                <img data-ref-id="SS-60626CF9165403A5" alt="Page screenshot showing the accessibility issue" loading="lazy" class="full-page-img" onclick="openLightbox(this)">
+                
+                <div class="locator-box" 
+                     data-x="38" 
+                     data-y="-193.09375" 
+                     data-w="1204" 
+                     data-h="14">
+                  <div class="locator-tooltip">#email-err<br>Dimensions: 1204x14</div>
+                </div>
+                
+              </div>
+            
+            
+            <div class="button-group">
+              <button class="btn-locate" onclick="locateElement(this)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                Locate Element
+              </button>
+            </div>
+            
+          
+        
+        
+      </div>
+      
+      <!-- Details -->
+      <div class="card-details">
+        <div class="badge-row">
+          
+          <span class="severity-badge" style="background:#7f1d1d; color:#fca5a5; border-color:#991b1b;">CONFIRMED BUG</span>
+          
+          
+          <span class="severity-badge badge-critical">CRITICAL</span>
+          <span class="severity-badge badge-wcag">4.1.3 STATUS MESSAGES</span>
+        </div>
+        
+        <div class="violation-title">Error message appears after form submission but will NOT be announced to screen reader users because it lacks role=&#39;alert&#39; or aria-live.</div>
+        
+        <div class="button-group" style="margin-bottom: 12px; margin-top: 4px;">
+           <button class="btn-secondary" onclick="shareIssue(this)">
+             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>
+             Share Issue
+           </button>
+        </div>
+        
+        <div class="explanation-block">
+          <h4>Axe-Core / WCAG Validation</h4>
+          <p><strong>Observed:</strong> Error element &#39;#email-err&#39; has no role=&#39;alert&#39; and no aria-live attribute. Screen readers will silently ignore it.</p>
+          <p><strong>Requirement:</strong> Error messages dynamically injected into the DOM must have role=&#39;alert&#39; or aria-live=&#39;assertive&#39; so screen readers automatically announce them.</p>
+        </div>
+
+        <div class="xpath-container">
+          <span>Selector:</span>
+          <code>#email-err</code>
+          <button class="copy-btn" data-selector="#email-err" onclick="copySelector(this)">Copy</button>
+        </div>
+
+        
+
+        <div class="wcag-ref" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Verified against WCAG 2.2 Standard (Level AA)</span>
+          
+          <a href="https://www.w3.org/TR/WCAG22/#status-messages" target="_blank" style="color: #6366f1; text-decoration: none; font-weight: 500; font-size: 0.9rem;">
+            Read Official W3C Spec ↗
+          </a>
+          
+        </div>
+      </div>
+    </div>
+    
+  </div>
+
+  <footer class="footer">
+    <p>Generated by <strong>AI Accessibility Testing Agent</strong> · 2026-09-25 13:31:32 UTC</p>
+    <p style="margin-top:0.5rem">WCAG Ruleset validated via axe-core industry standard engine.</p>
+  </footer>
+</main>
+
+<!-- Lightbox -->
+<div id="lightbox" class="lightbox" onclick="if(event.target===this) closeLightbox()">
+  <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+  <div class="lightbox-content-wrapper">
+    <img id="lb-img" class="lightbox-img" src="">
+    <div id="lb-box" class="locator-box" style="display:none">
+      <div id="lb-tooltip" class="locator-tooltip"></div>
+    </div>
+  </div>
+</div>
+
+<button id="scrollTopBtn" class="scroll-top" onclick="scrollToTop()" aria-label="Scroll to top">↑</button>
+
+<script>
+const SHARED_SCREENSHOTS = {
+  
+  "SS-42D6EBDDFEA6F433": "data:image/png;base64,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+Nwj99SLvFmJNptpeybtOt659669Ox95Nu05Hvr8oQv3H68emhSI0/rwDbfevPNMcuSFu1Z/AdENHxvZfeaR7GK777pr97lH0jDcTYhuuHJyg151BAAAsC30lcvlsD7nz5/ftWtX98cfPnz42LFjAWjkjwYAAHSy1uDZ1jZpgQYAAID1EYABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABR2BE23bFjxw4fPhyARskfjQAAAFw2PQjAwV/0AQAA2HRaoAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACisCP0wuHDhwPQ6NixYwEAALhsehCAk/TrL/rQyh8NAAC4rLRAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAorAjbC0vPn7/8TMX8w+773rg80NhC5h/8J5HQvPNpLf67M2HvvCxG8LlM//g/Rc+fnkvAQAAEIctVQHO0u/1dz2Quys8cs+D85VdSQSt/byO4e+5//EXwzaR3u6DT4dw4evb6rYBAAC2qC0VgC9cuBh231orsw59fO/Oc0+vM/VuXzd87AsP3BrOXXzpps89oAYMAACwXluqBfqmm3aGM0niHcozcBoB0/8mtdBHziX/TQrC4YFbn75nNuwO585d3Lk36z9O+5PPZccXW6brvdS1w7LPZ47fH5rblot914UxagPv3r279did9Y3JgavfUn1bflCHbQ23lTZejzyd1L63SC84AADA9rWlAvANH/vc3mePP3LPPY+EhkiYBOG7LlRn4c4/HS6eS358IEuEaUh8ae+hB5Ij02h6/+M3ZSelaff6ux74wlAWMo8/eFNy5ucPXWg7affFxx+qHpsOMfv4i0OVIR45V4mv6dZzYXf12FC5XDYveGd1kNVuKRkt35ae+NDjt3bY1vg4Kvl/6AHhFwAAYN222CrQaeZLHdq78+KZ4/d0mvdb65N+8elnL+4eqeTGGz42svvis0+nk2Xnnz63c+/HK8es2kidXjOvr6Y92LlkiOpl0oHrl9t58603VMddwy0lGfnM17O7GPp8vaO53TYAAAAuh622CnQuDaUfywqojzw4P9S5/TdNrOfy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CgIwAAAAURCAAQAAiMKO0AvPPPNMAAAAgE3UgwB8yy23BAAAANhcWqABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERhR9gI58+fDwAAALCF9ZXL5QAAAABXOi3QAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIAoCMAAAAFHYEdbh4sWLAQAAADbLzp07w6VSAQYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIwuUNwE9+7rrrbvvy95u2fv/Lt1133eeeDFxOa3jK6W9Tld8XAADgSqUCHLsk/e5/9M5TL2dO3fnofhkYAAC4MgnAcfv+l//To+HOUw99pPLxIw+dujM8+p9aivYAAADb3xYIwFmvbnMLbmsDb7ql1k5daNq9bYW01nboZulYn3uyPmJ9wPT0z305H6N4Y62Xbh4kO7z+seHS3XYcd7hUx+0Nez73P9t8zdaTvvP0d8K7b313/bD0Q7oRAADgStPrAJxEtqF7fzlvwH15/r53P7o/i2fv/HcH3h0efaQeD7//P09+590H/t07Q3PT7i/fO9Q+RnYaup1H9+8Pp/Ljwr1DheMevffkgfl0R1okTa48dG+4b77tkckg/+nW+fxayYfrrqt/rF06jahddRxnl6rdffotKyN0voXs+1b3nAr33vudhtHaP7KPPPTyy9+4+531I1sSMQAAwBXi8gfg7yRpq9FQPZplsfa+/5I34FZib6X+2JSAn/zSvXn+7bZpt/PQ7dQGfOfdp+5793fu/VItld75u9V8mF+5mhdbjqwdml0rvPu+U4WPlUtnX+O++dU7jp98pPglazl1hVuoDJ1fsjJy7VF03ef85Of2Pxryf2cAAAC4slz+APzuvCZZlxZIc++8+xuV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",
+  
+  "SS-60626CF9165403A5": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABQAAAARbCAIAAABXuJsgAAAQAElEQVR4nOz9D3Cdd30n+n+1ayDJZCHOkBBMh0j+NZZg20Y7yQXT2S0u0EHKluJMf6lEuD/iDmzrzK93I3X9i81m2oU7k8bOzSKxv96J24XBYdpUmrSNgd1IGUjrdO8UQ5NB2dIiOVxJocSQhIlDoCSk3T33eZ7znHOe8086smQfyd/Xa9pEev58n+85JjN55/P5fp9tpVIpAAAAwIXunwQAAACIgAAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgChsC9Bt3/6r37j16acrv/3LO/b+u93hbJx89De+PfC7/+83BIAN8ciHL7/pwfzna+6c+8qtby7//K173z54x5N1h5rvuvGB5z/97rD+p697HICC7/31X8w980rj0df+5Hve1hs2p2TGi//s5zbt9NhyBGC66yt3Hz/8317zv96795d/Ivs9DcPHb/xXb33w9l1hbU79xzvPhFsCwMYopt/Ek3cMvj20DLwAW01D3l3+6pe++aWvhk2Zgb/313/7zCsX/bMAG0ULNN108tEs/Q7n6TfxE//L796xPfy3v/2PJwNA93zr3n+fpd+k/pqYu/OakGbgjz/Swa3v/nR6y/rLths1DsAqet/2k68NLz67HCACKsB0zzN/cuxM+FdvraXfst1vPHTHO99e7YI++eiNSWk3V0vL3/7jmf9t8fX/6+LTf/B0CNe99k2Pv5g2Ud/35Ru/9Kb//9H/5ScCwAa45vo0+YY33/o7N96R1IO/fupb4d3FGnDeDB2KLdJ1rcvVbukH9h27qXxlral5xZNtxpn7nccG88p0XQt23Uzya3RPA2vw8g++F8LrQ2OXdF4tzg5eVKgcVw+EpH4cfvInwze/+WLtjvTgi8X7c8vV4+HVbxj8uZ9+ffVo0xC9tatf+eaXvvTsJu7SZksRgOme7y8/Hf7lvuZW51316fdH1QbptF/61kd/4gvvfHv57H97+s9veceD+aLfU//xfX+7dMs7rAEGNsKbd/1UUvJNG58vvyPLkUk59tMN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p+vqv+lmUQvjfaPFm1rv7pQl4OnphTwCZstwF85H/u1wkmm+r23unH4rocMe5trQ2cj5NmLl/14wXNtgu3YKAABga9rEAbh+qW/1VbS9Y/PZS3ny5bBzE0v5VsVDU9mbj/KVwUf3L6U7IRermOWNoepD69BUaWakelP6EqU2vcVZIba24jetkIZ2+Tfd6zmb/Qa9JLejSaYXDeZfy3CYadoGup2RmZkwXBu5su9zOl7te64/BQAAsBX1lEqlsD6Li4s7d+7s/PrHH3/8uuuuC5xL6TuRk/8GILMCAACb0lqD4VqDZ0tbcRMsmqUroQsF59qrjgEAACjbFrgQpP3fc33DPZWtr/onVH8BAADqCMAXit6x+dJYAAAAoA0t0AAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAK20I3PP744wEAAADOoy4E4Ouuuy4AAADA+aUFGgAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFLaFjbC4uBgAAABgE+splUoBAAAALnRaoAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACisC2sw5kzZwIAAACcL9u3bw9nSwUYAACAKAjAAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIArnNgA/8uHLL3/7vd9qOPqte99++eUffiRwLq3hW07/mCr8uQAAABcqFeDYJen3pgdvfOD5zAM3PniTDAwAAFyYBOC4fevef/9guPGBT7+7/Ou7P/3AjeHBf99UtAcAANj6NkEAznp1G1twmxt40yPVdupC0+7bV0hrLYdulI714UdqI9YGTG//8L35GMWJNT+6cZDs8tqvdY/u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0m8mG2Y22AAAAMC6VQoP4Nq1ayEaUQ0WAABg47EIFgAAAFEQgAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACiUArrx+effz44OPj1119nfz/99NMdHR379+8PAAAA0ID1EYD/8Y9/vP3225cuXZo98t81f/rTnz788MNf/OIXAQAAAFa0PqZAHzlypD79zsoOHj16NAAAAMC9rIMA/Mc//vGrr75a7uyVK1eyBgEAAABWtA4C8IULFx6wAQAAAKyDb4D/9re/PWADAAAAsA0SAAAAUVgHAfjXv/71AzYAAACAdRCADx48+IANAAAAYB0E4N/+9re/+c1vljvb0dGRNQgAAACwovXxDfDvf//7zZs3Lz7+k5/85L333gsAAABwL+tgFejMr371q7///e+ff/754ODg119/nR15+umns9rv/v37AwAAADRgfQTgaftrAgAAAKyebZAAAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKAjAAAABREIABAACIggAMAABAFARgAAAAoiAAAwAAEAUBGAAAgCgIwAAAAERBAAYAACAKpfAAdu7cGaIR1WABAAA2ngeqAP/sZz8rl8shAtkws8EGAAAA1q0kTdPwAD744IPx8fFvvvkmbFxPPfVUc3PzO++8EwAAAFi3HjQAAwAAwLpgESwAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKAjAAAAAREEABgAAIAoCMAAAAFEQgAEAAIiCAAwAAEAUBGAAAACiIAADAAAQBQEYAACAKPw/AAAA//8CUOouAAAABklEQVQDAAubBxjMCLXvAAAAAElFTkSuQmCC",
+  
+};
+
+document.querySelectorAll('img[data-ref-id]').forEach(img => {
+  const refId = img.getAttribute('data-ref-id');
+  if (SHARED_SCREENSHOTS[refId]) {
+    img.src = SHARED_SCREENSHOTS[refId];
+  }
+});
+</script>
+</body>
+</html>

@@ -164,6 +164,11 @@ class RemediationAgent:
         self._test_runner = TestRunner(repo_path=self._repo)
         self._verifier = VerificationEngine()
 
+        # Deduplication tracker: stores (file_path, line_number) tuples of
+        # lines already patched in this session to prevent duplicate PRs when
+        # multiple axe-core rules flag the same element.
+        self._patched_lines: set[tuple[str, int]] = set()
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     def remediate(
@@ -202,6 +207,27 @@ class RemediationAgent:
             return result
 
         result.source_location = source_location
+
+        # ─── Phase 1.2: Deduplication Guard ──────────────────────────────────
+        # If a previous finding in this session already patched the exact same
+        # file + line, skip this finding to prevent duplicate PRs.
+        dedup_key = (source_location.file_path, source_location.start_line)
+        if dedup_key in self._patched_lines:
+            log.warning(
+                "agent.duplicate_skipped",
+                finding_id=finding.finding_id,
+                rule_id=finding.rule_id,
+                file=source_location.file_path,
+                line=source_location.start_line,
+            )
+            result.status = RemediationStatus.MANUAL_REVIEW
+            result.manual_review_notes = (
+                f"DUPLICATE SKIPPED: Another finding already created a PR for "
+                f"{source_location.file_path}:{source_location.start_line}. "
+                f"Review that PR — it likely addresses this issue too."
+            )
+            result.duration_seconds = time.monotonic() - start_time
+            return result
 
         # ─── Phase 1.5: Stage 0 — Finding Validation ─────────────────────────
         # CRITICAL: Validate the scanner finding BEFORE any fix is generated.
@@ -337,6 +363,8 @@ class RemediationAgent:
                     continue  # retry — fix didn't actually resolve the issue
 
             # ─── SUCCESS ─────────────────────────────────────────────────────
+            # Register this file+line as patched to prevent duplicates
+            self._patched_lines.add(dedup_key)
             result.status = RemediationStatus.VERIFIED
             log.info(
                 "agent.success",

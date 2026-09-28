@@ -313,6 +313,118 @@ _RULES: list[ClassificationRule] = [
             "the document outline. Requires human review."
         ),
     ),
+
+    # ── WCAG 4.1.2 — Invalid ARIA attribute values ────────────────────────────
+    ClassificationRule(
+        rule_id="R016",
+        axe_rule_ids=["aria-valid-attr-value", "aria-allowed-attr", "aria-prohibited-attr"],
+        wcag_scs=["4.1.2"],
+        element_tags=["*"],
+        automation_level=RemediationAutomationLevel.SAFE_AUTO_FIX,
+        problem_type=ProblemType.INCORRECT_ARIA,
+        confidence=0.93,
+        reasoning=(
+            "ARIA attribute has an invalid value (e.g. aria-pressed='maybe', aria-checked='true' on non-checkbox). "
+            "Fix: correct the value to a valid ARIA token or remove the invalid attribute. "
+            "Deterministic — correct values are defined by the ARIA spec."
+        ),
+    ),
+
+    # ── WCAG 4.1.2 — Invalid ARIA role ───────────────────────────────────────
+    ClassificationRule(
+        rule_id="R017",
+        axe_rule_ids=["aria-roles", "aria-valid-attr"],
+        wcag_scs=["4.1.2"],
+        element_tags=["*"],
+        automation_level=RemediationAutomationLevel.SAFE_AUTO_FIX,
+        problem_type=ProblemType.INCORRECT_ARIA,
+        confidence=0.95,
+        reasoning=(
+            "Element has an invalid ARIA role (e.g. role='banana'). "
+            "Fix: remove the invalid role attribute entirely. "
+            "Safe — removing a bad role always improves accessibility."
+        ),
+    ),
+
+    # ── WCAG 4.1.2 — presentation-role-conflict ───────────────────────────────
+    ClassificationRule(
+        rule_id="R018",
+        axe_rule_ids=["presentation-role-conflict"],
+        wcag_scs=["4.1.2"],
+        element_tags=["button", "a", "input", "select", "textarea"],
+        automation_level=RemediationAutomationLevel.SAFE_AUTO_FIX,
+        problem_type=ProblemType.INCORRECT_ARIA,
+        confidence=0.97,
+        reasoning=(
+            "Interactive element has role='presentation' or role='none', which conflicts with its "
+            "inherent interactive semantics. Fix: remove the role attribute. "
+            "Interactive elements must always expose their role to AT."
+        ),
+    ),
+
+    # ── WCAG 1.4.4 — meta viewport zoom disabled ─────────────────────────────
+    ClassificationRule(
+        rule_id="R019",
+        axe_rule_ids=["meta-viewport", "meta-viewport-large"],
+        wcag_scs=["1.4.4"],
+        element_tags=["meta"],
+        automation_level=RemediationAutomationLevel.SAFE_AUTO_FIX,
+        problem_type=ProblemType.MISSING_MARKUP,
+        confidence=0.99,
+        reasoning=(
+            "The viewport meta tag disables user zoom (maximum-scale=1, user-scalable=no). "
+            "Fix: remove maximum-scale and user-scalable restrictions. "
+            "Purely structural — always the correct fix per WCAG 1.4.4."
+        ),
+    ),
+
+    # ── WCAG 1.3.1 — list / listitem structure ────────────────────────────────
+    ClassificationRule(
+        rule_id="R020",
+        axe_rule_ids=["list", "listitem"],
+        wcag_scs=["1.3.1"],
+        element_tags=["ul", "ol", "li", "dl", "dt", "dd"],
+        automation_level=RemediationAutomationLevel.AI_PROPOSED_FIX,
+        problem_type=ProblemType.SEMANTIC_STRUCTURE,
+        confidence=0.78,
+        reasoning=(
+            "List or listitem structure is invalid (e.g. <li> outside <ul>, non-<li> inside <ul>). "
+            "Fix depends on content intent — AI should inspect and propose correcting the markup. "
+            "Moderate confidence because the correct parent element needs inference from context."
+        ),
+    ),
+
+    # ── WCAG 2.4.7 — scrollable region not keyboard focusable ────────────────
+    ClassificationRule(
+        rule_id="R021",
+        axe_rule_ids=["scrollable-region-focusable"],
+        wcag_scs=["2.4.7"],
+        element_tags=["div", "section", "article", "aside"],
+        automation_level=RemediationAutomationLevel.SAFE_AUTO_FIX,
+        problem_type=ProblemType.KEYBOARD_ACCESS,
+        confidence=0.95,
+        reasoning=(
+            "A scrollable region is not reachable via keyboard (missing tabindex). "
+            "Fix: add tabindex='0' to the scrollable container. "
+            "Purely structural — no content changes required."
+        ),
+    ),
+
+    # ── WCAG 2.5.8 — target size minimum (WCAG 2.2) ──────────────────────────
+    ClassificationRule(
+        rule_id="R022",
+        axe_rule_ids=["target-size"],
+        wcag_scs=["2.5.8"],
+        element_tags=["button", "a", "input"],
+        automation_level=RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED,
+        problem_type=ProblemType.KEYBOARD_ACCESS,
+        confidence=0.85,
+        reasoning=(
+            "Touch target is smaller than the WCAG 2.2 minimum of 24x24px. "
+            "Fixing this requires coordinated CSS changes that may affect layout. "
+            "A human designer must ensure the fix doesn't break the UI."
+        ),
+    ),
 ]
 
 
