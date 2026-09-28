@@ -88,7 +88,13 @@ class GeminiLLMClient(BaseLLMClient):
 
         self._client = genai.Client(api_key=key.get_secret_value())
         self._types = types
-        log.info("llm_client.gemini_initialized", model=settings.llm_model)
+
+        # Normalize: google-genai SDK requires "models/" prefix
+        model = settings.llm_model
+        if model and not model.startswith("models/"):
+            model = f"models/{model}"
+        self._model = model
+        log.info("llm_client.gemini_initialized", model=self._model)
 
     async def generate(self, prompt: str, system: str = "", temperature: float | None = None) -> LLMResponse | None:
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
@@ -96,7 +102,7 @@ class GeminiLLMClient(BaseLLMClient):
         try:
             log.debug("llm_client.generating", provider="google", prompt_len=len(full_prompt), temperature=effective_temp)
             response = self._client.models.generate_content(
-                model=settings.llm_model,
+                model=self._model,
                 contents=full_prompt,
                 config=self._types.GenerateContentConfig(
                     temperature=effective_temp,
@@ -108,7 +114,7 @@ class GeminiLLMClient(BaseLLMClient):
             prompt_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
             completion_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
             log.info("llm_client.response_received", provider="google", prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
-            return LLMResponse(text=text, model=settings.llm_model, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
+            return LLMResponse(text=text, model=self._model, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
         except Exception as exc:
             log.error("llm_client.generate_failed", provider="google", error=str(exc))
             return None
@@ -236,7 +242,9 @@ class GroqLLMClient(BaseLLMClient):
 
         self._current_key_idx = 0
         self._client = AsyncGroq(api_key=self._keys[self._current_key_idx], max_retries=0)
-        self._model = settings.llm_model
+        # Groq uses its own model — never inherit from settings.llm_model (which is a Gemini name)
+        # openai/gpt-oss-120b is Groq's best currently available chat model
+        self._model = "openai/gpt-oss-120b"
         log.info("llm_client.groq_initialized", model=self._model, total_keys=len(self._keys))
 
     async def generate(self, prompt: str, system: str = "", temperature: float | None = None) -> LLMResponse | None:

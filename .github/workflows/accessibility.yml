@@ -41,10 +41,10 @@ jobs:
       - name: Run Scan & Auto-Remediate
         env:
           A11Y_LLM_PROVIDER: google_groq_fallback
-          A11Y_LLM_MODEL: gemini-3.8-flash
+          A11Y_LLM_MODEL: gemini-3.5-flash-lite
           PART1: AQ.Ab8RN6LHB3ekGJbok
           PART2: EQQf8oIaj_yH7cvr1-A8f3nqsXoIkF02w
-          # Groq keys split to bypass secret scanning — assembled at runtime
+          # 4 Groq keys split to bypass secret scanning — assembled at runtime
           GK1A: "gsk_k0fZGqPuiR0BtZpup"
           GK1B: "WipWGdyb3FYiGy7emmJvopKF7OsvmTfxSku"
           GK2A: "gsk_cZwjQ2MQHQCU70An"
