@@ -40,14 +40,14 @@ jobs:
           
       - name: Run Scan & Auto-Remediate
         env:
-          A11Y_LLM_PROVIDER: gemini
+          A11Y_LLM_PROVIDER: google
           A11Y_LLM_MODEL: gemini-1.5-flash
           PART1: AQ.Ab8RN6LHB3ekGJbok
           PART2: EQQf8oIaj_yH7cvr1-A8f3nqsXoIkF02w
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          export A11Y_GEMINI_API_KEY="${PART1}${PART2}"
+          export A11Y_GOOGLE_API_KEY="${PART1}${PART2}"
           git config --global user.name "accessibility-agent[bot]"
           git config --global user.email "accessibility-agent[bot]@users.noreply.github.com"
           
