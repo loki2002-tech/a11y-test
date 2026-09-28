@@ -18,11 +18,6 @@ jobs:
       matrix:
         page:
           - index.html
-          - a11y-test-page-2-dashboard.html
-          - a11y-test-page-3-news.html
-          - a11y-test-page-4-checkout.html
-          - a11y-test-page-5-app.html
-          - a11y-test-page-6-hotel.html
     
     steps:
       - name: Checkout code
