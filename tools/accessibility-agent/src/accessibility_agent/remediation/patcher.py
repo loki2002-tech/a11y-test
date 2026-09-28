@@ -72,6 +72,7 @@ class PatchGenerator:
         self,
         plan: RemediationPlan,
         location: SourceLocation,
+        finding_data: dict,
     ) -> GeneratedPatch | None:
         """
         Generate a GeneratedPatch for the given plan and location.
@@ -113,7 +114,7 @@ class PatchGenerator:
         )
 
         # ── Select and apply strategy ─────────────────────────────────────────
-        patched_lines = self._apply_strategy(plan, location, original_lines)
+        patched_lines = self._apply_strategy(plan, location, original_lines, finding_data)
 
         if patched_lines is None:
             log.warning(
@@ -168,10 +169,15 @@ class PatchGenerator:
         plan: RemediationPlan,
         location: SourceLocation,
         original_lines: list[str],
+        finding_data: dict,
     ) -> list[str] | None:
         """Select and apply the appropriate patch strategy."""
         lang = location.language.lower()
         is_css = lang in ("css", "scss", "sass")
+
+        # HTML fixes → route to robust AST BeautifulSoup patcher
+        if lang == "html":
+            return self._apply_ast_strategy(plan, location, original_lines, finding_data)
 
         # CSS / styling fixes → always line replacement
         if is_css or plan.problem_type == ProblemType.FOCUS_VISIBILITY:
@@ -199,6 +205,129 @@ class PatchGenerator:
 
         # Fallback
         return None
+
+    def _apply_ast_strategy(
+        self,
+        plan: RemediationPlan,
+        location: SourceLocation,
+        original_lines: list[str],
+        finding_data: dict,
+    ) -> list[str] | None:
+        """
+        Robust AST-based patcher using BeautifulSoup.
+        Relies on finding_data['element']['selector'] to pinpoint the element accurately.
+        """
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            log.error("patcher.ast_failed_no_bs4")
+            return None
+
+        # Try to parse the document as HTML
+        html_text = "".join(original_lines)
+        soup = BeautifulSoup(html_text, "html.parser")
+        
+        # 1. Locate the precise target element using axe-core CSS selector
+        css_selector = finding_data.get("element", {}).get("selector", "")
+        target = None
+        
+        if css_selector:
+            # BeautifulSoup doesn't support complex pseudo-classes like :nth-child properly on some versions,
+            # but standard ID/class/nth-of-type works. Axe selectors are usually simple enough.
+            # Clean up the selector if necessary
+            css_selector = css_selector.replace('"', "")
+            try:
+                target = soup.select_one(css_selector)
+            except Exception as exc:
+                log.warning("patcher.ast_selector_error", selector=css_selector, error=str(exc))
+                target = None
+
+        # Fallback to line numbers if selector fails
+        if not target:
+            expected_tag = self._expected_tag(plan)
+            # Find all tags on or around the start line
+            tags = soup.find_all(expected_tag) if expected_tag else soup.find_all()
+            for t in tags:
+                if getattr(t, "sourceline", None) == location.start_line:
+                    target = t
+                    break
+            
+            # Very loose fallback for <html> tag
+            if not target and plan.target_attribute == "lang":
+                target = soup.find("html")
+            elif not target and plan.problem_type == ProblemType.MISSING_MARKUP and expected_tag == "title":
+                target = soup.find("head")
+                
+        if not target:
+            log.warning("patcher.ast_target_not_found", finding_id=plan.finding_id, selector=css_selector)
+            return None
+
+        # 2. Apply the modification
+        is_modified = False
+
+        # --- A. Element Replacement ---
+        if plan.target_attribute == "__REPLACE_ELEMENT__":
+            new_html = BeautifulSoup(plan.target_value, "html.parser")
+            target.replace_with(new_html)
+            is_modified = True
+
+        # --- B. Element Insertion (<title>, etc) ---
+        elif (
+            plan.problem_type == ProblemType.MISSING_MARKUP
+            and not plan.target_attribute
+            and plan.target_value not in ("en",)
+        ):
+            new_element_html = self._build_new_element(plan)
+            if new_element_html:
+                new_tag = BeautifulSoup(new_element_html, "html.parser")
+                if target.name == "head" or target.name == "body":
+                    target.append(new_tag)
+                else:
+                    target.insert_before(new_tag)
+                is_modified = True
+
+        # --- C. Multi-Attribute Injection ---
+        elif plan.target_attribute and "|" in plan.target_attribute:
+            attrs = [a.strip() for a in plan.target_attribute.split("|")]
+            values = [v.strip() for v in plan.target_value.split("|")]
+            for attr, val in zip(attrs, values):
+                if val == REMOVE_SENTINEL:
+                    if attr in target.attrs:
+                        del target[attr]
+                        is_modified = True
+                else:
+                    target[attr] = val
+                    is_modified = True
+
+        # --- D. Single Attribute Injection ---
+        elif plan.target_attribute:
+            if plan.target_value == REMOVE_SENTINEL:
+                if plan.target_attribute in target.attrs:
+                    del target[plan.target_attribute]
+                    is_modified = True
+            else:
+                target[plan.target_attribute] = plan.target_value
+                is_modified = True
+
+        if not is_modified:
+            return None
+
+        # 3. Reconstruct lines while preserving file structure
+        # BS4 can sometimes alter whitespace. To be safe, we just return the full BS4 output
+        # and rely on Git + the patcher's diff to generate the actual unified diff.
+        new_text = str(soup)
+        
+        # Split but preserve endings exactly like original
+        eol = "\r\n" if original_lines and "\r\n" in original_lines[0] else "\n"
+        new_lines = []
+        raw_lines = new_text.split("\n")
+        for i, part in enumerate(raw_lines):
+            if i < len(raw_lines) - 1:
+                new_lines.append(part + eol)
+            elif part:
+                new_lines.append(part + eol)
+
+        return new_lines
 
     @staticmethod
     def _select_strategy_name(plan: RemediationPlan) -> str:

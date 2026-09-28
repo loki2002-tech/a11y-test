@@ -285,7 +285,7 @@ class RemediationAgent:
                 return self._manual_review(result, plan.fix_strategy, start_time)
             result.plans.append(plan)
 
-            patch = self._generate_patch(plan, source_location)
+            patch = self._generate_patch(plan, source_location, finding_data)
             if patch is None:
                 continue
             result.patches.append(patch)
@@ -468,10 +468,10 @@ class RemediationAgent:
             return None
 
     def _generate_patch(
-        self, plan: RemediationPlan, source_location: SourceLocation
+        self, plan: RemediationPlan, source_location: SourceLocation, finding_data: dict
     ) -> GeneratedPatch | None:
         try:
-            patch = self._patch_generator.generate(plan, source_location)
+            patch = self._patch_generator.generate(plan, source_location, finding_data)
             if patch is None:
                 log.warning("agent.patch_none", finding_id=plan.finding_id)
             return patch
