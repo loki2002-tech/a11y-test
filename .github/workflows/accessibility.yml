@@ -41,7 +41,7 @@ jobs:
       - name: Run Scan & Auto-Remediate
         env:
           A11Y_LLM_PROVIDER: google
-          A11Y_LLM_MODEL: gemini-1.5-flash
+          A11Y_LLM_MODEL: gemini-2.0-flash
           PART1: AQ.Ab8RN6LHB3ekGJbok
           PART2: EQQf8oIaj_yH7cvr1-A8f3nqsXoIkF02w
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -109,7 +109,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          python -c "
+          cat << 'EOF' > report_issue.py
           import json, glob, subprocess, os
 
           # Read the output results, not the inputs!
@@ -163,8 +163,9 @@ jobs:
               print('No findings to report.')
               exit(0)
 
+          page_name = os.environ.get("PAGE_NAME", "Page")
           lines = [
-              '## ♿ Accessibility Findings for ${{ matrix.page }}',
+              f'## ♿ Accessibility Findings for {page_name}',
               '',
               'The AI agent scanned this page and found the following issues that **cannot be auto-fixed** and need a human developer to resolve.',
               '',
@@ -179,10 +180,10 @@ jobs:
               f.write(body)
 
           repo = os.environ.get('GITHUB_REPOSITORY', '')
-          title = f'[A11y] Findings requiring manual review for ${{ matrix.page }}'
+          title = f'[A11y] Findings requiring manual review for {page_name}'
 
           result = subprocess.run(
-              ['gh', 'issue', 'list', '--repo', repo, '--search', f'in:title \"{title}\"', '--state', 'open', '--json', 'number'],
+              ['gh', 'issue', 'list', '--repo', repo, '--search', f'in:title "{title}"', '--state', 'open', '--json', 'number'],
               capture_output=True, text=True
           )
           existing = json.loads(result.stdout or '[]')
@@ -198,4 +199,6 @@ jobs:
                               '--body-file', '/tmp/issue_body.md',
                               '--label', 'accessibility'])
               print(f'Created new issue: {title}')
-          "
+          EOF
+          export PAGE_NAME="${{ matrix.page }}"
+          python report_issue.py
