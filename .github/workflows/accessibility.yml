@@ -41,7 +41,7 @@ jobs:
       - name: Run Scan & Auto-Remediate
         env:
           A11Y_LLM_PROVIDER: google
-          A11Y_LLM_MODEL: gemini-2.0-flash
+          A11Y_LLM_MODEL: gemini-3.8-flash
           PART1: AQ.Ab8RN6LHB3ekGJbok
           PART2: EQQf8oIaj_yH7cvr1-A8f3nqsXoIkF02w
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
