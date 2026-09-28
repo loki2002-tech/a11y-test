@@ -52,6 +52,7 @@ jobs:
           git config --global user.email "accessibility-agent[bot]@users.noreply.github.com"
           
           mkdir -p reports
+          rm -f result_finding_*.json
           PAGE_URL="http://localhost:8080/${{ matrix.page }}"
           
           echo "==> Scanning: $PAGE_URL"

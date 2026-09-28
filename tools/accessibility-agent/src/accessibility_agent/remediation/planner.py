@@ -47,46 +47,96 @@ log = get_logger(__name__)
 # ── Safe-fix templates (no LLM needed) ───────────────────────────────────────
 # Keyed by (problem_type, element_tag).
 
-_SAFE_TEMPLATES: dict[tuple[str, str], dict[str, str]] = {
-    # html[lang] missing
-    (ProblemType.MISSING_MARKUP.value, "html"): {
+_SAFE_TEMPLATES: dict[str, dict[str, str]] = {
+    "html-has-lang": {
         "root_cause": "The <html> element is missing a lang attribute, which prevents screen readers from using the correct pronunciation engine.",
         "fix_strategy": "Add lang='en' (or the appropriate BCP-47 language tag) to the opening <html> element.",
         "target_attribute": "lang",
         "target_value": "en",
         "expected_change": "Add lang=\"en\" to <html>",
         "risk_level": "low",
-        "risk_assessment": "Zero risk — adding lang is additive and has no visual or behavioral side-effects.",
+        "risk_assessment": "Zero risk - adding lang is additive and has no side-effects.",
     },
-    # tabindex > 0
-    (ProblemType.KEYBOARD_ACCESS.value, "*"): {
+    "tabindex": {
         "root_cause": "A positive tabindex value overrides the natural DOM tab order, creating a confusing and unpredictable keyboard navigation experience.",
-        "fix_strategy": "Replace tabindex='[positive number]' with tabindex='0' to include the element in the natural tab order without disrupting it.",
+        "fix_strategy": "Replace tabindex='[positive number]' with tabindex='0' to include the element in the natural tab order.",
         "target_attribute": "tabindex",
         "target_value": "0",
         "expected_change": "Replace positive tabindex with tabindex=\"0\"",
         "risk_level": "low",
-        "risk_assessment": "Low risk — the element remains focusable; only the tab order is normalized.",
+        "risk_assessment": "Low risk - element remains focusable; only the tab order is normalized.",
     },
-    # aria-hidden on interactive
-    (ProblemType.INCORRECT_ARIA.value, "button"): {
-        "root_cause": "aria-hidden='true' is applied to an interactive button, hiding it entirely from assistive technology while it remains visible and functional on-screen.",
-        "fix_strategy": "Remove the aria-hidden='true' attribute from the button element.",
+    "aria-hidden-focus": {
+        "root_cause": "aria-hidden='true' is applied to an interactive element, hiding it entirely from assistive technology.",
+        "fix_strategy": "Remove the aria-hidden='true' attribute from the element.",
         "target_attribute": "aria-hidden",
-        "target_value": "",  # empty means remove
-        "expected_change": "Remove aria-hidden=\"true\" from button",
+        "target_value": "",
+        "expected_change": "Remove aria-hidden=\"true\"",
         "risk_level": "low",
-        "risk_assessment": "Low risk — restoring AT visibility to an element that is already visible on-screen.",
+        "risk_assessment": "Low risk - restoring AT visibility to an element that is already visible on-screen.",
     },
-    # Decorative image (inside interactive element)
-    (ProblemType.IMAGE_ALT.value, "img"): {
-        "root_cause": "A decorative image is missing an alt attribute. Without alt='', screen readers announce the filename, which is not meaningful.",
-        "fix_strategy": "Add alt='' to mark the image as decorative (the parent element provides the accessible name).",
+    "aria-hidden-body": {
+        "root_cause": "aria-hidden='true' is applied to the body element, hiding the entire document from assistive technology.",
+        "fix_strategy": "Remove the aria-hidden='true' attribute from the body element.",
+        "target_attribute": "aria-hidden",
+        "target_value": "",
+        "expected_change": "Remove aria-hidden=\"true\" from body",
+        "risk_level": "low",
+        "risk_assessment": "Low risk - restores access to the document.",
+    },
+    "image-alt": {
+        "root_cause": "A decorative image is missing an alt attribute. Without alt='', screen readers announce the filename.",
+        "fix_strategy": "Add alt='' to mark the image as decorative.",
         "target_attribute": "alt",
         "target_value": "",
         "expected_change": "Add alt=\"\" to decorative image",
         "risk_level": "low",
-        "risk_assessment": "Low risk — adding alt='' is the correct pattern for decorative images; no content meaning is lost.",
+        "risk_assessment": "Low risk - adding alt='' is the correct pattern for decorative images.",
+    },
+    "presentation-role-conflict": {
+        "root_cause": "Interactive element has role='presentation' or role='none', conflicting with its interactive semantics.",
+        "fix_strategy": "Remove the invalid role attribute.",
+        "target_attribute": "role",
+        "target_value": "",
+        "expected_change": "Remove role attribute",
+        "risk_level": "low",
+        "risk_assessment": "Low risk - restores native interactive semantics.",
+    },
+    "meta-viewport": {
+        "root_cause": "The viewport meta tag disables user zoom (maximum-scale=1, user-scalable=no).",
+        "fix_strategy": "Replace the content attribute with a standard responsive configuration.",
+        "target_attribute": "content",
+        "target_value": "width=device-width, initial-scale=1",
+        "expected_change": "Update viewport to allow zoom",
+        "risk_level": "low",
+        "risk_assessment": "Low risk - allows users to zoom content up to 200%.",
+    },
+    "meta-viewport-large": {
+        "root_cause": "The viewport meta tag limits user zoom below the required 200%.",
+        "fix_strategy": "Replace the content attribute with a standard responsive configuration.",
+        "target_attribute": "content",
+        "target_value": "width=device-width, initial-scale=1",
+        "expected_change": "Update viewport to allow zoom",
+        "risk_level": "low",
+        "risk_assessment": "Low risk - allows users to zoom content up to 200%.",
+    },
+    "scrollable-region-focusable": {
+        "root_cause": "A scrollable region is not reachable via keyboard because it lacks a tabindex attribute.",
+        "fix_strategy": "Add tabindex='0' to make the scrollable container keyboard-focusable.",
+        "target_attribute": "tabindex",
+        "target_value": "0",
+        "expected_change": "Add tabindex=\"0\" to scrollable region",
+        "risk_level": "low",
+        "risk_assessment": "Low risk - ensures keyboard users can scroll the content.",
+    },
+    "aria-roles": {
+        "root_cause": "Element has an invalid or misspelled ARIA role.",
+        "fix_strategy": "Remove the invalid role attribute.",
+        "target_attribute": "role",
+        "target_value": "",
+        "expected_change": "Remove invalid role attribute",
+        "risk_level": "low",
+        "risk_assessment": "Low risk - browsers ignore invalid roles anyway, removing it cleans up the DOM.",
     },
 }
 
@@ -261,6 +311,7 @@ class RemediationPlanner:
     def _try_template_plan(
         self,
         finding_id: str,
+        finding_data: dict[str, Any],
         ctx: SourceContext,
         automation_level: RemediationAutomationLevel,
         confidence: float,
@@ -270,13 +321,9 @@ class RemediationPlanner:
         wcag_title: str,
         attempt_number: int,
     ) -> RemediationPlan | None:
-        """Look up a deterministic fix template."""
-        key = (ctx.problem_type.value, ctx.element_tag)
-        template = _SAFE_TEMPLATES.get(key)
-        if not template:
-            # Try wildcard element tag
-            key = (ctx.problem_type.value, "*")
-            template = _SAFE_TEMPLATES.get(key)
+        '''Attempt to generate a deterministic plan from a safe template.'''
+        rule_id = finding_data.get("rule_id", "")
+        template = _SAFE_TEMPLATES.get(rule_id)
         if not template:
             return None
 
@@ -297,7 +344,7 @@ class RemediationPlanner:
             wcag_criterion=wcag_sc,
             wcag_level=wcag_level,
             wcag_title=wcag_title,
-            reasoning=f"Deterministic template applied for {ctx.problem_type.value} on <{ctx.element_tag}>.",
+            reasoning=f"Deterministic template applied for {rule_id}.",
             requires_manual_review=False,
         )
 
