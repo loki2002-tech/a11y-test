@@ -133,10 +133,37 @@ _SAFE_TEMPLATES: dict[str, dict[str, str]] = {
         "root_cause": "Element has an invalid or misspelled ARIA role.",
         "fix_strategy": "Remove the invalid role attribute.",
         "target_attribute": "role",
-        "target_value": "",
+        "target_value": "__REMOVE_ATTRIBUTE__",
         "expected_change": "Remove invalid role attribute",
         "risk_level": "low",
         "risk_assessment": "Low risk - browsers ignore invalid roles anyway, removing it cleans up the DOM.",
+    },
+    "aria-allowed-role": {
+        "root_cause": "An ARIA role is invalid for the element it is on.",
+        "fix_strategy": "Remove the invalid role attribute.",
+        "target_attribute": "role",
+        "target_value": "__REMOVE__",
+        "expected_change": "Remove invalid role attribute",
+        "risk_level": "low",
+        "risk_assessment": "Low risk - removes a role that is invalid for the tag.",
+    },
+    "aria-valid-attr-value": {
+        "root_cause": "An ARIA attribute has a value that is invalid or malformed.",
+        "fix_strategy": "Remove the invalid ARIA attribute entirely.",
+        "target_attribute": "aria-invalid-value", # Handled generically if we can't extract the exact attribute. Ideally AI handles this, but as a fallback we return this.
+        "target_value": "__REMOVE__",
+        "expected_change": "Remove invalid ARIA attribute",
+        "risk_level": "medium",
+        "risk_assessment": "Medium risk - removing invalid ARIA is usually safer than leaving it.",
+    },
+    "input-button-name": {
+        "root_cause": "A button input is missing a value attribute, causing it to lack an accessible name.",
+        "fix_strategy": "Add value='Submit' to provide a fallback name.",
+        "target_attribute": "value",
+        "target_value": "Submit",
+        "expected_change": "Add fallback value='Submit'",
+        "risk_level": "low",
+        "risk_assessment": "Low risk - provides a safe default label.",
     },
 }
 

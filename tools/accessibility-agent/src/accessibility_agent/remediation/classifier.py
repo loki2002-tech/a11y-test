@@ -425,6 +425,82 @@ _RULES: list[ClassificationRule] = [
             "A human designer must ensure the fix doesn't break the UI."
         ),
     ),
+
+    # ── WCAG 4.1.2 — ARIA roles require specific attributes ──────────────────
+    ClassificationRule(
+        rule_id="R023",
+        axe_rule_ids=["aria-required-attr"],
+        wcag_scs=["4.1.2"],
+        element_tags=["*"],
+        automation_level=RemediationAutomationLevel.AI_PROPOSED_FIX,
+        problem_type=ProblemType.INCORRECT_ARIA,
+        confidence=0.85,
+        reasoning=(
+            "An element with a specific ARIA role is missing required ARIA attributes. "
+            "AI needs context to deduce what attribute values are appropriate (e.g. aria-expanded='false')."
+        ),
+    ),
+
+    # ── WCAG 4.1.2 — ARIA command elements require accessible names ──────────
+    ClassificationRule(
+        rule_id="R024",
+        axe_rule_ids=["aria-command-name"],
+        wcag_scs=["4.1.2"],
+        element_tags=["*"],
+        automation_level=RemediationAutomationLevel.AI_PROPOSED_FIX,
+        problem_type=ProblemType.INCORRECT_ARIA,
+        confidence=0.90,
+        reasoning=(
+            "An element with role='link', 'button', or 'menuitem' requires an accessible name. "
+            "AI can generate an aria-label based on visual text or icon context."
+        ),
+    ),
+
+    # ── WCAG 4.1.2 — ARIA allowed role ────────────────────────────────────────
+    ClassificationRule(
+        rule_id="R025",
+        axe_rule_ids=["aria-allowed-role"],
+        wcag_scs=["4.1.2"],
+        element_tags=["*"],
+        automation_level=RemediationAutomationLevel.SAFE_AUTO_FIX,
+        problem_type=ProblemType.INCORRECT_ARIA,
+        confidence=0.98,
+        reasoning=(
+            "An ARIA role is invalid for the element it is on. "
+            "The safest and most correct fix is usually to remove the invalid role attribute."
+        ),
+    ),
+
+    # ── WCAG 2.4.1 — Frame must have title ────────────────────────────────────
+    ClassificationRule(
+        rule_id="R026",
+        axe_rule_ids=["frame-title"],
+        wcag_scs=["2.4.1"],
+        element_tags=["iframe", "frame"],
+        automation_level=RemediationAutomationLevel.AI_PROPOSED_FIX,
+        problem_type=ProblemType.MISSING_MARKUP,
+        confidence=0.95,
+        reasoning=(
+            "An iframe requires a title attribute for screen readers. "
+            "AI can infer a good title from the src URL or surrounding content."
+        ),
+    ),
+
+    # ── WCAG 1.3.1 — Page has heading one ─────────────────────────────────────
+    ClassificationRule(
+        rule_id="R027",
+        axe_rule_ids=["page-has-heading-one"],
+        wcag_scs=["1.3.1", "2.4.6"],
+        element_tags=["*"],
+        automation_level=RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED,
+        problem_type=ProblemType.SEMANTIC_STRUCTURE,
+        confidence=0.99,
+        reasoning=(
+            "Page structure is missing a top-level <h1> heading. "
+            "Generating an <h1> requires understanding the page layout and visual hierarchy. "
+            "Highly likely to disrupt visual design if injected blindly. Manual review required."
+        ),
+    ),
 ]
 
 
