@@ -30,6 +30,7 @@ class LogLevel(str, Enum):
 
 class LLMProvider(str, Enum):
     GOOGLE = "google"
+    GOOGLE_GROQ_FALLBACK = "google_groq_fallback"  # Try Gemini first, auto-fall back to Groq
     OPENAI = "openai"
     OLLAMA = "ollama"
     GROQ = "groq"
@@ -207,6 +208,10 @@ class Settings(BaseSettings):
             raise ValueError(
                 "A11Y_GOOGLE_API_KEY must be set when llm_provider=google. "
                 "Add it to your .env file — never commit secrets to git."
+            )
+        if self.llm_provider == LLMProvider.GOOGLE_GROQ_FALLBACK and not self.google_api_key:
+            raise ValueError(
+                "A11Y_GOOGLE_API_KEY must be set when llm_provider=google_groq_fallback."
             )
         if self.llm_provider == LLMProvider.OPENAI and not self.openai_api_key:
             raise ValueError(

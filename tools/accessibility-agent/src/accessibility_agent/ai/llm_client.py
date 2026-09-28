@@ -306,6 +306,50 @@ class GroqLLMClient(BaseLLMClient):
         return "groq"
 
 
+class GeminiWithGroqFallbackClient(BaseLLMClient):
+    """
+    Tries Gemini first. If Gemini fails for any reason (quota exhausted,
+    model deprecated, API key issue), automatically falls back to Groq.
+
+    This gives 14,400 free requests/day (Groq) instead of Gemini's 20/day.
+    Both API keys must be configured. If Groq also fails, returns None.
+    """
+
+    def __init__(self) -> None:
+        self._gemini = GeminiLLMClient()
+        try:
+            self._groq: GroqLLMClient | None = GroqLLMClient()
+        except Exception as exc:
+            log.warning("llm_client.groq_fallback_unavailable", error=str(exc))
+            self._groq = None
+        log.info("llm_client.fallback_chain_initialized",
+                 gemini_model=settings.llm_model,
+                 groq_available=self._groq is not None)
+
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        temperature: float | None = None,
+    ) -> "LLMResponse | None":
+        # Try Gemini first
+        result = await self._gemini.generate(prompt, system_prompt, temperature)
+        if result is not None:
+            return result
+
+        # Gemini failed (quota, 404, auth, etc.) — try Groq
+        if self._groq is not None:
+            log.warning("llm_client.gemini_failed_switching_to_groq")
+            return await self._groq.generate(prompt, system_prompt, temperature)
+
+        log.error("llm_client.all_providers_failed")
+        return None
+
+    @property
+    def provider_name(self) -> str:
+        return "google_groq_fallback"
+
+
 def create_llm_client() -> BaseLLMClient:
     """
     Factory — returns the correct LLM client based on settings.
@@ -318,6 +362,12 @@ def create_llm_client() -> BaseLLMClient:
             return GeminiLLMClient()
         except Exception as exc:
             log.error("llm_client.gemini_init_failed", error=str(exc))
+            return DisabledLLMClient()
+    elif settings.llm_provider == LLMProvider.GOOGLE_GROQ_FALLBACK:
+        try:
+            return GeminiWithGroqFallbackClient()
+        except Exception as exc:
+            log.error("llm_client.fallback_init_failed", error=str(exc))
             return DisabledLLMClient()
     elif settings.llm_provider == LLMProvider.OPENAI:
         try:

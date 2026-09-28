@@ -280,12 +280,12 @@ class RemediationPlanner:
         # ── SAFE_AUTO_FIX: use deterministic template ─────────────────────────
         if automation_level == RemediationAutomationLevel.SAFE_AUTO_FIX:
             template_plan = self._try_template_plan(
-                finding_id, source_context, automation_level,
+                finding_id, finding_data, source_context, automation_level,
                 classification_confidence, classified_by,
                 wcag_sc, wcag_level, wcag_title, attempt_number,
             )
             if template_plan:
-                log.info("planner.template_used", finding_id=finding_id)
+                log.info("planner.template_used", finding_id=finding_id, rule_id=finding_data.get("rule_id", ""))
                 return template_plan
 
         # ── LIKELY / AI_PROPOSED: call LLM ────────────────────────────────────

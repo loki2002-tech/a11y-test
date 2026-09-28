@@ -268,7 +268,7 @@ class RemediationAgent:
 
         # ─── Phase 2: Classify + Plan ────────────────────────────────────────
 
-        classification = self._classify(finding_data, source_location)
+        classification, class_confidence = self._classify(finding_data, source_location)
         if classification == RemediationAutomationLevel.DO_NOT_AUTO_REMEDIATE:
             return self._manual_review(result, "Classifier: DO_NOT_AUTO_REMEDIATE", start_time)
 
@@ -277,7 +277,8 @@ class RemediationAgent:
             result.attempts = attempt
             log.info("agent.attempt", finding_id=finding.finding_id, attempt=attempt)
 
-            plan = self._plan(finding_data, source_location, classification, attempt)
+            previous_failure = result.plans[-1].fix_strategy if result.plans else ""
+            plan = self._plan(finding_data, source_location, classification, class_confidence, attempt, previous_failure)
             if plan is None:
                 continue
             if plan.requires_manual_review:
@@ -414,7 +415,7 @@ class RemediationAgent:
 
     def _classify(
         self, finding_data: dict, source_location: SourceLocation
-    ) -> RemediationAutomationLevel:
+    ) -> tuple[RemediationAutomationLevel, float]:
         try:
             source_context = self._analyzer.analyze(source_location, finding_data)
             automation_level, _, confidence, _ = self._classifier.classify(
@@ -427,21 +428,23 @@ class RemediationAgent:
             )
         except Exception as exc:
             log.error("agent.classify_error", error=str(exc))
-            return RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED
+            return RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED, 0.5
 
         # If we got here, it requires AI planning
         if self._dry_run:
             log.warning("remediate.ai_planning_skipped_dry_run")
-            return RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED
+            return RemediationAutomationLevel.MANUAL_REVIEW_REQUIRED, confidence
 
-        return automation_level
+        return automation_level, confidence
 
     def _plan(
         self,
         finding_data: dict,
         source_location: SourceLocation,
         classification: RemediationAutomationLevel,
+        classification_confidence: float,
         attempt: int,
+        previous_failure: str = "",
     ) -> RemediationPlan | None:
         try:
             import asyncio
@@ -452,9 +455,10 @@ class RemediationAgent:
                     location=source_location,
                     source_context=source_context,
                     automation_level=classification,
-                    classification_confidence=0.9,
-                    classified_by="agent",
+                    classification_confidence=classification_confidence,
+                    classified_by="deterministic_rules",
                     attempt_number=attempt,
+                    previous_failure=previous_failure,
                 )
             )
             log.info("agent.planned", strategy=plan.fix_strategy[:60])
